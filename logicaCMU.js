@@ -10,7 +10,12 @@ puppeteer.use(StealthPlugin());
 const sesiones = new Map();
 const configData = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const TIEMPO_EXPIRACION = 4 * 60 * 1000; // 10 minutos en milisegundos
-const config = require('./config_proxi');
+const config = {
+    host: process.env.PROXY_HOST,
+    port: process.env.PROXY_PORT,
+    user: process.env.PROXY_USER, // Asegúrate de usar los nombres que configuraste
+    pass: process.env.PROXY_PASS
+};
 
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
