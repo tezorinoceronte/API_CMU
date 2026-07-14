@@ -1,4 +1,12 @@
-const { pool } = require('./cola');
+const mysql = require('mysql2');
+
+const connection = mysql.createConnection({
+  host: process.env.DB_HOST,      // Aquí leerá la variable que pusiste en Render
+  user: process.env.DB_USER,      // Aquí leerá el usuario de Hospedando
+  password: process.env.DB_PASSWORD, // Aquí leerá tu contraseña
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT || 3306
+});
 const { limpiarSesionesInactivas } = require('./logicaCMU');
 
 async function iniciarDispatcher() {
