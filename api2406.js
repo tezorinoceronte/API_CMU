@@ -12,6 +12,9 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = 'clave_secreta_2026'; // Define esto aquí
 const screenshotsDir = path.join(__dirname, 'screenshots');
 
+const authRoutes = require('./login'); 
+app.use('/auth', authRoutes);
+
 fs.ensureDirSync(screenshotsDir);
 
 // Configuración básica
