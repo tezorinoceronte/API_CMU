@@ -2,10 +2,15 @@ const axios = require('axios');
 
 // Función puente para ejecutar SQL a través de tu API PHP
 async function ejecutarQuery(sql) {
+    const url = process.env.API_URL;
+    console.log("DEBUG: Intentando conectar a la URL:", url); // Esto te dirá qué está pasando
+    
+    if (!url || !url.startsWith('http')) {
+        throw new Error("La variable API_URL no está configurada o es inválida");
+    }
+
     try {
-        const response = await axios.post(process.env.API_URL, {
-            sql: sql
-        });
+        const response = await axios.post(url, { sql: sql });
         return response.data;
     } catch (error) {
         console.error("❌ Error en la conexión con el puente PHP:", error.message);
