@@ -3,6 +3,12 @@ const bcrypt = require('bcrypt');
 const cookieParser = require('cookie-parser');
 const { pool } = require('./cola'); // Nota: sin .js en CommonJS
 
+const cors = require('cors');
+
+app.use(cors({
+    origin: 'https://soymuybonita.com', // El dominio donde está tu HTML
+    credentials: true // Permite que el navegador envíe cookies y cabeceras de autorización
+}));
 const router = express.Router();
 
 router.use(cookieParser());
