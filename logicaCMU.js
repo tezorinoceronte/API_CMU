@@ -152,7 +152,9 @@ async function manejarRecargas(tarea, connection) {
     }
 }
 
-//-- VALIDA FORCE
+//-- VALIDA FORCE ----------------> LA PRIMER CONSULTA 
+
+
 async function validarForce(page, numero, userId, tareaId) {
     console.log(`🚀 Iniciando proceso para número: ${numero} (Tarea: ${tareaId})`);
 
@@ -160,7 +162,7 @@ async function validarForce(page, numero, userId, tareaId) {
         // 1. Navegar a la página
         await page.goto('https://force.mmoviles.com/login', { waitUntil: 'networkidle2', timeout: 30000 });
 
-        // 2. Escribir número (limpiamos antes por si acaso)
+        // 2. Escribir número
         await page.waitForSelector('#iccid_info', { visible: true });
         await page.evaluate(() => document.querySelector('#iccid_info').value = '');
         await page.type('#iccid_info', String(numero));
@@ -170,7 +172,7 @@ async function validarForce(page, numero, userId, tareaId) {
         await page.click('#button_info');
         console.log("🔍 Clic en Buscar, esperando resultados...");
 
-        // 4. Esperar resultados dinámicos (Sin recargar página)
+        // 4. Esperar resultados
         await page.waitForFunction(
             () => {
                 const el = document.querySelector('#iccid_response');
@@ -189,10 +191,10 @@ async function validarForce(page, numero, userId, tareaId) {
 
         console.log("✨ Resultados obtenidos:", resultados);
 
-        // 6. Actualizar Base de Datos antes de terminar
-        await pool.execute(
-            "UPDATE public.cola_tareas SET estado = 'COMPLETADO', resultado = ? WHERE id = ?", 
-            [JSON.stringify(resultados), tareaId]
+        // 6. Actualizar Base de Datos (USANDO .query y $1, $2)
+        await pool.query(
+            "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+            ['COMPLETADO', JSON.stringify(resultados), tareaId]
         );
 
         return resultados;
@@ -200,16 +202,19 @@ async function validarForce(page, numero, userId, tareaId) {
     } catch (error) {
         console.error("❌ Error en validarForce:", error.message);
         
-        // Intentar registrar el error en BD si tenemos el ID
+        // 7. Registrar error en BD (USANDO .query y $1, $2)
         if (tareaId) {
-            await pool.execute(
-                "UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", 
-                [error.message.substring(0, 255), tareaId]
+            await pool.query(
+                "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+                ['ERROR', error.message.substring(0, 255), tareaId]
             );
         }
-        throw error; // Relanzamos para que el worker lo sepa
+        throw error;
     }
 }
+
+
+
 
 // 1. HERRAMIENTA TELCEL (Requiere Login)
 
