@@ -1,15 +1,27 @@
 const axios = require('axios');
 
-// Función puente para ejecutar SQL a través de tu API PHP
 const API_URL = process.env.API_URL || "https://soymuybonita.com/app/api/api_db.php";
 
 async function ejecutarQuery(sql) {
-    console.log("DEBUG: Conectando a:", API_URL); // Esto saldrá en tus LOGS
+    console.log("DEBUG: Conectando a:", API_URL);
     try {
-        const response = await axios.post(API_URL, { sql: sql });
+        const response = await axios.post(API_URL, 
+            { sql: sql }, // Cuerpo de la petición
+            {             // Configuración (aquí van los headers)
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+            }
+        );
         return response.data;
     } catch (error) {
-        console.error("❌ Error en la conexión:", error.message);
+        // Mejoramos el log para ver por qué falla
+        if (error.response) {
+            console.error("❌ Error en la conexión (Status):", error.response.status);
+            console.error("❌ Detalle:", error.response.data);
+        } else {
+            console.error("❌ Error en la conexión:", error.message);
+        }
         throw error;
     }
 }
