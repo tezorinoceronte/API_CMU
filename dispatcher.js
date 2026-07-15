@@ -1,17 +1,17 @@
-const mysql = require('mysql2');
+const axios = require('axios');
 
-// 1. CORRECCIÓN: Usar createPool para manejar múltiples conexiones eficientemente
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
-
+// Función que actúa como puente hacia tu archivo PHP
+async function ejecutarQuery(sql) {
+    try {
+        const response = await axios.post(process.env.API_URL, {
+            sql: sql
+        });
+        return response.data;
+    } catch (error) {
+        console.error("❌ Error en la conexión con el puente PHP:", error.message);
+        throw error;
+    }
+}
 // Convertimos el pool a promesas para poder usar await
 const poolPromise = pool.promise();
 
