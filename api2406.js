@@ -2,32 +2,24 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs-extra');
-const jwt = require('jsonwebtoken'); // Necesario para el token111
+const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { pool } = require('./cola');
 
-
 const app = express();
-const PORT = process.env.PORT || 3000;
-const JWT_SECRET = 'clave_secreta_2026'; // Define esto aquí
+const PORT = process.env.PORT || 10000;
+const JWT_SECRET = 'clave_secreta_2026';
 const screenshotsDir = path.join(__dirname, 'screenshots');
 
 fs.ensureDirSync(screenshotsDir);
 
-// Configuración básica
-app.use(cors({
-    origin: '*', // Permite peticiones desde cualquier lugar
-    credentials: true
-}));
-
-
+// Middlewares básicos
+app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/screenshots', express.static(screenshotsDir));
-const authRoutes = require('./login'); 
-app.use('/auth', authRoutes);
 
-// --- ESTE MIDDLEWARE REEMPLAZA A TU "AUTH" DE SESIÓN ---
+// Middleware de verificación de Token
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -36,12 +28,14 @@ const verifyToken = (req, res, next) => {
 
     jwt.verify(token, JWT_SECRET, (err, decoded) => {
         if (err) return res.status(403).json({ error: "Token inválido" });
-        req.user = decoded; // Ahora tienes el usuario en req.user.id
+        req.user = decoded;
         next();
     });
 };
 
-// --- TUS RUTAS ---
+// --- RUTAS DE AUTENTICACIÓN ---
+// IMPORTANTE: Si ya tienes este post en 'login.js', 
+// elimina este bloque aquí para evitar duplicados
 app.post('/auth/login', async (req, res) => {
     const { correo, password } = req.body;
     try {
@@ -55,44 +49,24 @@ app.post('/auth/login', async (req, res) => {
         const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '24h' });
         res.json({ success: true, token: token }); 
     } catch (err) {
+        console.error("Error en login:", err);
         res.status(500).json({ success: false, message: "Error interno" });
     }
 });
 
-// Ejemplo de ruta protegida usando el token
+// Rutas protegidas
 app.get('/api/check-session', verifyToken, (req, res) => {
     res.json({ active: true, userId: req.user.id });
 });
+
 app.get('/api/auth/me', verifyToken, (req, res) => {
-    // req.user.id viene del token que ya validaste con verifyToken
     res.json({ success: true, id: req.user.id });
 });
 
-
-
-// API DE DEPURACIÓN (Corregida para leer la sesión de express-session)
-app.get('/api/ver-usuario-sesion', (req, res) => {
-    if (req.session && req.session.usuarioId) {
-        console.log("Datos en sesión:", req.session);
-        res.json({ 
-            success: true, 
-            id_en_sesion: req.session.usuarioId,
-            rol_en_sesion: req.session.rol 
-        });
-    } else {
-        res.json({ success: false, message: "No hay sesión activa" });
-    }
-});
-
-
-
-// RUTA DE LOGOUT
+// RUTA LOGOUT (CORREGIDA: Eliminamos req.session porque no configuraste sesiones)
 app.post('/logout', (req, res) => {
-    req.session.destroy((err) => {
-        if (err) return res.status(500).json({ success: false, message: "Error al cerrar" });
-        res.clearCookie('miSessionID'); 
-        res.json({ success: true, message: "Sesión cerrada correctamente" });
-    });
+    // Si usas JWT, el logout se hace en el cliente borrando el token de localStorage
+    res.json({ success: true, message: "Sesión cerrada en cliente" });
 });
 
 //-----------------------------------------------------
