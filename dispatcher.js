@@ -7,6 +7,7 @@ const pool = new Pool({
   }
 });
 
+
 async function ejecutarQuery(sql, params = []) {
     const client = await pool.connect();
     try {
