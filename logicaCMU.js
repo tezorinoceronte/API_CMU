@@ -129,7 +129,7 @@ async function manejarRecargas(tarea, connection) {
             const nuevoEstado = (resultado && resultado.tipo === 'COMPLETADO') ? 'COMPLETADO' : 'RECARGA_PENDIENTE_REGISTRO';
             
             await connection.execute(`
-                UPDATE public.cola_tareas 
+                UPDATE public.reas 
                 SET estado = ?, iccid = ?, linea_registrada = ?, fecha_recarga = ?, primer_evento = ?, resultado = ? 
                 WHERE id = ?`, 
                 [nuevoEstado, resultado.iccid || null, resultado.registrado || null, formatearFecha(resultado.fechaActivacion), resultado.primerEvento || null, JSON.stringify(resultado), tarea.id]
@@ -139,7 +139,7 @@ async function manejarRecargas(tarea, connection) {
             await ejecutarLoginTelcel(page, tarea.user_id);
             const resultado = await hacerClicEnDatosLinea(page, tarea.user_id, tarea.numero);
             await connection.execute(`
-                UPDATE public.cola_tareas SET estado = 'COMPLETADO', resultado = ? WHERE id = ?`, 
+                UPDATE public.reas SET estado = 'COMPLETADO', resultado = ? WHERE id = ?`, 
                 [JSON.stringify(resultado), tarea.id]
             );
         }
@@ -147,7 +147,7 @@ async function manejarRecargas(tarea, connection) {
         console.error("❌ Error grave en manejarRecargas:", e);
         // Garantizamos que el id exista antes de actualizar
         if (tarea && tarea.id) {
-            await connection.execute("UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", [e.message, tarea.id]);
+            await connection.execute("UPDATE public.reas SET estado = 'ERROR', resultado = ? WHERE id = ?", [e.message, tarea.id]);
         }
     }
 }
@@ -191,7 +191,7 @@ async function validarForce(page, numero, userId, tareaId) {
 
         // 6. Actualizar Base de Datos antes de terminar
         await pool.execute(
-            "UPDATE cola_tareas SET estado = 'COMPLETADO', resultado = ? WHERE id = ?", 
+            "UPDATE public.cola_tareas SET estado = 'COMPLETADO', resultado = ? WHERE id = ?", 
             [JSON.stringify(resultados), tareaId]
         );
 
@@ -203,7 +203,7 @@ async function validarForce(page, numero, userId, tareaId) {
         // Intentar registrar el error en BD si tenemos el ID
         if (tareaId) {
             await pool.execute(
-                "UPDATE cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", 
+                "UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", 
                 [error.message.substring(0, 255), tareaId]
             );
         }
@@ -253,7 +253,7 @@ async function ejecutarLoginTelcel(page, userId, tarea, connection) {
         // Actualizamos la base de datos para marcar la tarea como ERROR
         if (connection && tarea) {
             await connection.execute(
-                "UPDATE cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", 
+                "UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", 
                 [e.message.substring(0, 255), tarea.id]
             );
         }
@@ -374,7 +374,7 @@ async function manejarACT_ESIM(tarea, connection) {
         const [rows] = await connection.execute("SELECT estado FROM public.cola_tareas WHERE id = ?", [tarea.id]);
         if (rows[0] && rows[0].estado !== 'ERROR') {
             await connection.execute(
-                "UPDATE cola_tareas SET estado = 'ACT_ESIM_FALLO', resultado = ? WHERE id = ?", 
+                "UPDATE public.cola_tareas SET estado = 'ACT_ESIM_FALLO', resultado = ? WHERE id = ?", 
                 [e.message.substring(0, 255), tarea.id]
             );
         }
@@ -399,13 +399,13 @@ async function manejarACT_ESIM_REINTENTO(tarea, connection) {
         await procederExtraccion(page, tarea, connection);
     } catch (e) {
         console.error(`❌ [Manejador] Error en reintento ID ${tarea.id}:`, e.message);
-        await connection.execute("UPDATE cola_tareas SET estado = 'ACT_ESIM_FALLO', resultado = ? WHERE id = ?", [e.message, tarea.id]);
+        await connection.execute("UPDATE public.cola_tareas SET estado = 'ACT_ESIM_FALLO', resultado = ? WHERE id = ?", [e.message, tarea.id]);
     }
 }
 
 async function procederExtraccion(page, tarea, connection) {
     // Marcamos inicialmente como procesando
-    await connection.execute("UPDATE cola_tareas SET estado = 'PROCESANDO_ESIM' WHERE id = ?", [tarea.id]);
+    await connection.execute("UPDATE public.cola_tareas SET estado = 'PROCESANDO_ESIM' WHERE id = ?", [tarea.id]);
     
     try {
         const datos = await ejecutarExtraccionManual(page, tarea.user_id);
@@ -425,7 +425,7 @@ async function procederExtraccion(page, tarea, connection) {
         const nuevoEstado = esCompletado ? 'ACT_ESIM_VINCULAR_LISTA' : 'ACT_ESIM_VINCULAR_LISTA';
 
         await connection.execute(
-            `UPDATE cola_tareas 
+            `UPDATE public.cola_tareas 
              SET estado = ?, 
                  ESTADO_ACT = ?, 
                  folio_act = ?, 
@@ -453,7 +453,7 @@ async function procederExtraccion(page, tarea, connection) {
         console.log(`✅ [Ejecución única] Tarea ${tarea.id} finalizada con estado: ${nuevoEstado}`);
     } catch (err) {
         console.error(`❌ [Error en ejecución única] ID ${tarea.id}:`, err.message);
-        await connection.execute("UPDATE cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = ? WHERE id = ?", [err.message, tarea.id]);
+        await connection.execute("UPDATE public.cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = ? WHERE id = ?", [err.message, tarea.id]);
         throw err; 
     }
 }
@@ -481,7 +481,7 @@ async function manejarACT_ESIM_EXITOSA_QR(tarea, connection) {
 
       //  if (resultado.success) {
         //    await connection.execute(
-         //       "UPDATE cola_tareas SET estado = 'ACT_ESIM_EXITOSA_QR', resultado = ? WHERE id = ?", 
+         //       "UPDATE public.cola_tareas SET estado = 'ACT_ESIM_EXITOSA_QR', resultado = ? WHERE id = ?", 
          //       ['QR_CAPTURA_EXITOSA', tarea.id]
          //   );
          //   console.log(`✅ [Manejador] Tarea ${tarea.id} finalizada con éxito.`);
@@ -496,7 +496,7 @@ async function manejarACT_ESIM_EXITOSA_QR(tarea, connection) {
       //      console.error("No se pudo guardar la captura de error:", err.message);
       //  }
 
-      //  await connection.execute("UPDATE cola_tareas SET estado = 'ACT_ESIM_FALLO', resultado = ? WHERE id = ?", [e.message, tarea.id]);
+      //  await connection.execute("UPDATE public.cola_tareas SET estado = 'ACT_ESIM_FALLO', resultado = ? WHERE id = ?", [e.message, tarea.id]);
    // }
 return; }
 
@@ -705,7 +705,7 @@ async function registrarLinea(page, numero, userId, tareaId) {
 
     // --- AQUÍ ESTÁ TU LÓGICA QUE HABÍA BORRADO POR ERROR ---
     // Actualizamos la base de datos antes de salir
-    await pool.execute("UPDATE cola_tareas SET estado = 'ESPERANDO_USER' WHERE id = ?", [tareaId]);
+    await pool.execute("UPDATE public.cola_tareas SET estado = 'ESPERANDO_USER' WHERE id = ?", [tareaId]);
     console.log("✅ SMS enviado. Estado actualizado a ESPERANDO_USER en DB...");
 
     // --- AQUÍ VA LA CAPTURA ---
@@ -774,17 +774,17 @@ async function manejarQR(page, tarea, connection) {
             
             // 3. Guardamos SOLAMENTE el link. Ya no necesitamos guardar el Base64.
                 await connection.execute(
-                "UPDATE cola_tareas SET estado = 'ENVIANDO_QR', resultado = 'PROCESADO', link_final = ? WHERE id = ?", 
+                "UPDATE public.cola_tareas SET estado = 'ENVIANDO_QR', resultado = 'PROCESADO', link_final = ? WHERE id = ?", 
                 [linkFinal, tarea.id]
             );
             console.log("💾 [FINALIZADO] Link guardado exitosamente en BD.");
         } else {
             console.error("❌ [ERROR] La imagen se obtuvo pero no se pudo decodificar.");
-            await connection.execute("UPDATE cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = 'Error al decodificar QR' WHERE id = ?", [tarea.id]);
+            await connection.execute("UPDATE public.cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = 'Error al decodificar QR' WHERE id = ?", [tarea.id]);
         }
     } else {
         console.error("❌ [ERROR] No se pudo obtener la imagen QR del navegador.");
-        await connection.execute("UPDATE cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = 'No se obtuvo imagen' WHERE id = ?", [tarea.id]);
+        await connection.execute("UPDATE public.cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = 'No se obtuvo imagen' WHERE id = ?", [tarea.id]);
     }
 }
 
@@ -825,7 +825,7 @@ async function tomarCaptura(page, nombreArchivo) {
 // Asegúrate de pasar la conexión como parámetro
 async function reintentarExtraccion(tareaId, connection) {
     try {
-        const query = "UPDATE cola_tareas SET estado = 'REINTENTAR_QR' WHERE id = ?";
+        const query = "UPDATE public.cola_tareas SET estado = 'REINTENTAR_QR' WHERE id = ?";
         await connection.execute(query, [tareaId]);
         console.log("✅ Orden de reintento enviada a la base de datos.");
     } catch (err) {
@@ -840,7 +840,7 @@ async function manejarInicioSesion(page, tarea) {
     await ejecutarLoginTelcel(page, tarea.user_id);
     
     // Si el login fue exitoso, el Dispatcher debería pasar el estado a VALIDANDO_TOKEN
-    await pool.execute("UPDATE cola_tareas SET estado = 'VALIDANDO_TOKEN' WHERE id = ?", [tarea.id]);
+    await pool.execute("UPDATE public.cola_tareas SET estado = 'VALIDANDO_TOKEN' WHERE id = ?", [tarea.id]);
     return true;
 }
 
@@ -850,16 +850,16 @@ async function manejarToken(page, tarea, connection) {
     const res = await inyectarTokenYValidar(page, tarea.id, tarea.numero);
     
     if (res.error) {
-        await connection.execute("UPDATE cola_tareas SET estado = 'FALLO_TOKEN', resultado = ? WHERE id = ?", [res.error, tarea.id]);
+        await connection.execute("UPDATE public.cola_tareas SET estado = 'FALLO_TOKEN', resultado = ? WHERE id = ?", [res.error, tarea.id]);
         return false;
     }
     
-    await connection.execute("UPDATE cola_tareas SET estado = 'GENERANDO_QR' WHERE id = ?", [tarea.id]);
+    await connection.execute("UPDATE public.cola_tareas SET estado = 'GENERANDO_QR' WHERE id = ?", [tarea.id]);
     return true;
 }
 async function inyectarTokenYValidar(page, tareaId, numero) {
     // 1. Obtener token fresco
-    const [rows] = await pool.execute("SELECT token FROM cola_tareas WHERE id = ?", [tareaId]);
+    const [rows] = await pool.execute("SELECT token FROM public.cola_tareas WHERE id = ?", [tareaId]);
     const token = rows[0]?.token;
 
     if (!token) return { error: "Token no encontrado en BD." };
@@ -896,7 +896,7 @@ async function inyectarTokenYValidar(page, tareaId, numero) {
         // --- CORRECCIÓN CRÍTICA ---
         // Al fallar, ponemos el token en NULL en la base de datos.
         // Esto obliga a que el proceso solo avance si el frontend vuelve a escribir uno nuevo.
-        await pool.execute("UPDATE cola_tareas SET token = NULL WHERE id = ?", [tareaId]);
+        await pool.execute("UPDATE public.cola_tareas SET token = NULL WHERE id = ?", [tareaId]);
         
         return { error: mensajeError };
     }
@@ -934,7 +934,7 @@ async function manejarQR_SMS(page, tarea, connection) {
             
             // CORRECCIÓN: Incluimos user_id en el WHERE para mantener la seguridad de la API
             await connection.execute(
-                "UPDATE cola_tareas SET estado = 'ENVIANDO_QR', resultado = 'PROCESADO', link_final = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?",
+                "UPDATE public.cola_tareas SET estado = 'ENVIANDO_QR', resultado = 'PROCESADO', link_final = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?",
                 [linkFinal, tarea.id, tarea.user_id]
             );
         } else {
@@ -947,7 +947,7 @@ async function manejarQR_SMS(page, tarea, connection) {
         // CORRECCIÓN: Marcamos como fallo incluyendo el user_id para que el 
         // backend siga reconociendo la propiedad de la tarea durante el reintento.
         await connection.execute(
-            "UPDATE cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?",
+            "UPDATE public.cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?",
             [e.message.substring(0, 255), tarea.id, tarea.user_id]
         );
     }
@@ -1078,7 +1078,7 @@ async function activarESIM(page, tarea, connection) {
         console.error(`❌ [BOT ERROR] Tarea ${tarea.id} falló en: ${e.message}`);
         if (connection) {
             await connection.execute(
-                "UPDATE cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", 
+                "UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", 
                 [e.message.substring(0, 255), tarea.id]
             );
         }
@@ -1244,7 +1244,7 @@ async function manejarACT_FISICO(tarea, connection, estadoActual) {
         
         if (exito) {
             await connection.execute(
-                "UPDATE cola_tareas SET estado = 'ACT_FISICA_EXITOSA_QR', user_id = ? WHERE id = ?", 
+                "UPDATE public.cola_tareas SET estado = 'ACT_FISICA_EXITOSA_QR', user_id = ? WHERE id = ?", 
                 [tarea.user_id, tarea.id]
             );
         } else {
@@ -1252,7 +1252,7 @@ async function manejarACT_FISICO(tarea, connection, estadoActual) {
         }
     } catch (e) {
         console.error(`❌ [Manejador] Error general en activación física ID ${tarea.id}:`, e.message);
-        await connection.execute("UPDATE cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", [e.message.substring(0, 255), tarea.id]);
+        await connection.execute("UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", [e.message.substring(0, 255), tarea.id]);
     }
 }
 
@@ -1359,7 +1359,7 @@ async function activarFisica(page, tarea, connection) {
         console.error(`❌ [BOT ERROR] Tarea ${tarea.id} falló en: ${e.message}`);
         if (connection) {
             await connection.execute(
-                "UPDATE cola_tareas SET estado = 'ERROR', estatus_act = 'ERROR', resultado = ? WHERE id = ?", 
+                "UPDATE public.cola_tareas SET estado = 'ERROR', estatus_act = 'ERROR', resultado = ? WHERE id = ?", 
                 [e.message.substring(0, 255), tarea.id]
             );
         }
@@ -1402,7 +1402,7 @@ async function manejarQR_ACT(page, tarea, connection) {
             
             // CORRECCIÓN: Incluimos user_id en el WHERE para mantener la seguridad de la API
             await connection.execute(
-                "UPDATE cola_tareas SET estado = 'ENVIANDO_QR', resultado = 'PROCESADO', link_final = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?",
+                "UPDATE public.cola_tareas SET estado = 'ENVIANDO_QR', resultado = 'PROCESADO', link_final = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?",
                 [linkFinal, tarea.id, tarea.user_id]
             );
         } else {
@@ -1415,7 +1415,7 @@ async function manejarQR_ACT(page, tarea, connection) {
         // CORRECCIÓN: Marcamos como fallo incluyendo el user_id para que el 
         // backend siga reconociendo la propiedad de la tarea durante el reintento.
         await connection.execute(
-            "UPDATE cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?",
+            "UPDATE public.cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?",
             [e.message.substring(0, 255), tarea.id, tarea.user_id]
         );
     }
@@ -1442,7 +1442,7 @@ async function manejarACT_FISICA_REINTENTO(tarea, connection) {
         console.error(`❌ [Manejador] Error en reintento ID ${tarea.id}:`, e.message);
         // Marcamos como FALLO para que el Dispatcher sepa que sigue habiendo problemas, pero no lo bloquee
         await connection.execute(
-            "UPDATE cola_tareas SET estado = 'ACT_FISICA_FALLO', resultado = ? WHERE id = ?", 
+            "UPDATE public.cola_tareas SET estado = 'ACT_FISICA_FALLO', resultado = ? WHERE id = ?", 
             [e.message, tarea.id]
         );
     }
@@ -1459,7 +1459,7 @@ async function procederExtraccion_FISICA(page, tarea, connection) {
         const nuevoEstado = esCompletado ? 'COMPLETADO' : 'REINTENTANDO_EXTRACCION';
 
         await connection.execute(
-            `UPDATE cola_tareas 
+            `UPDATE public.cola_tareas 
              SET estado = ?, 
                  ESTADO_ACT = ?, 
                  folio_act = ?, 
@@ -1484,7 +1484,7 @@ async function procederExtraccion_FISICA(page, tarea, connection) {
     } catch (errExtraccion) {
         console.error(`❌ [Error en extracción] ID ${tarea.id}:`, errExtraccion.message);
         // Si hay error técnico, marcamos como FALLO_EXTRACCION (el bot se detiene)
-        await connection.execute("UPDATE cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", [errExtraccion.message, tarea.id]);
+        await connection.execute("UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", [errExtraccion.message, tarea.id]);
         throw errExtraccion;
     }
 }
