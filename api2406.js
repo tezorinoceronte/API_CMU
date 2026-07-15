@@ -762,4 +762,11 @@ app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
 });
 
 
+iniciarDispatcher().catch(err => console.error("Error crítico en dispatcher:", err));
+
+// Arrancar el servidor
+app.listen(PORT, () => {
+    console.log(`🚀 Sistema CMU corriendo en puerto ${PORT}`);
+});
+
 app.listen(PORT, () => console.log(`🚨...🚀 api2406.js corriendo en http://localhost:${PORT}`));
