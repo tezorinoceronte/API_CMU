@@ -26,7 +26,7 @@ async function cicloWorker() {
         connection = await pool.getConnection();
         
         const [tareas] = await connection.execute(
-            `SELECT * FROM cola_tareas 
+            `SELECT * FROM public.cola_tareas 
              WHERE worker_id = ? 
              AND estado IN ('ASIGNADO', 'FALLO_TOKEN_ERROR2', 'PROCESANDO_ESIM', 'REINTENTAR_QR', 
                             'ACT_ESIM_REINTENTAR', 'ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO', 'ACT_ESIM', 
@@ -43,7 +43,7 @@ async function cicloWorker() {
         
         // Solo marcamos como PROCESANDO si no está en espera de interacción
         if (tarea.estado !== 'VALIDANDO_TOKEN' && tarea.estado !== 'FALLO_TOKEN') {
-            await connection.execute("UPDATE cola_tareas SET estado = 'PROCESANDO' WHERE id = ?", [tarea.id]);
+            await connection.execute("UPDATE public.cola_tareas SET estado = 'PROCESANDO' WHERE id = ?", [tarea.id]);
         }
         
         console.log(`🛠 [Worker: ${WORKER_ID}] Procesando tarea ${tarea.id} | Tipo: ${tarea.tipo_tarea} | Estado: ${tarea.estado}`);
