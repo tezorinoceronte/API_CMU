@@ -68,7 +68,7 @@ async function iniciarDispatcher() {
                 }
             }
         } catch (err) { 
-            console.error("❌ Error en Dispatcher:", err.message); 
+           console.error("❌ ERROR DETALLADO:", err.stack);
         }
         await new Promise(r => setTimeout(r, 2000));
     }
