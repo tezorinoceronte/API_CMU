@@ -8,7 +8,7 @@ const { pool } = require('./cola');
 
 const app = express();
 
-// --- 1. PROTECCIÓN CONTRA CAÍDAS (CRÍTICO PARA RENDER) ---
+// --- 1. PROTECCIÓN CONTRA CAÍDAS (CRÍTICO PARA RENDER) ---1
 process.on('uncaughtException', (err) => {
     console.error('❌ EXCEPCIÓN NO CAPTURADA:', err);
 });
