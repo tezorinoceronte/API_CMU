@@ -1,23 +1,30 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken'); // <-- NUEVO
+const jwt = require('jsonwebtoken');
 const { pool } = require('./cola');
 
-const JWT_SECRET = 'clave_super_secreta_2026'; // Guárdala en una variable de entorno
+const JWT_SECRET = process.env.JWT_SECRET || 'clave_super_secreta_2026';
 
 router.post('/login', async (req, res) => {
     const { correo, password } = req.body;
 
+    if (!correo || !password) {
+        return res.status(400).json({ success: false, message: "Datos incompletos" });
+    }
+
     try {
-        const [rows] = await pool.execute('SELECT * FROM usuarios_act_cmu WHERE correo = ?', [correo]);
-        const user = rows[0];
+        // CORRECCIÓN 1: Usar .query en lugar de .execute
+        // CORRECCIÓN 2: Usar $1 en lugar de ?
+        const result = await pool.query('SELECT * FROM public.usuarios_act_cmu WHERE correo = $1', [correo]);
+        
+        // CORRECCIÓN 3: Extraer 'rows' del resultado de pg
+        const user = result.rows[0];
 
         if (!user || !(await bcrypt.compare(password, user.password_hash))) {
             return res.status(401).json({ success: false, message: "Credenciales incorrectas" });
         }
 
-        // Generar Token
         const token = jwt.sign(
             { id: user.id, nombre: user.nombre_completo, rol: user.rol }, 
             JWT_SECRET, 
@@ -25,11 +32,11 @@ router.post('/login', async (req, res) => {
         );
 
         console.log("✅ [LOGIN] Usuario autenticado, token generado.");
-        res.json({ success: true, token: token }); // Enviamos el token al cliente
+        res.json({ success: true, token: token });
 
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false });
+        console.error("❌ ERROR EN LOGIN:", err);
+        res.status(500).json({ success: false, message: "Error interno del servidor" });
     }
 });
 
