@@ -24,51 +24,54 @@
     </div>
 
 <script>
- const API_URL = '';
+const API_URL = ''; // Apunta al mismo dominio
 
-// FUNCIÓN LOGIN: La única que debe existir
 async function login() {
     const correo = document.getElementById('correo').value;
     const password = document.getElementById('password').value;
     const msg = document.getElementById('mensaje');
 
+    console.log("🚀 Iniciando petición a:", window.location.origin + '/auth/login');
+
     try {
         const res = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ correo, password }) // Ya no necesita credentials: 'include'
+            body: JSON.stringify({ correo, password })
         });
 
+        // Capturamos el resultado del servidor
         const data = await res.json();
+        console.log("📡 Respuesta recibida (Estado " + res.status + "):", data);
 
-        if (data.success) {
-            // Guardamos el token en el navegador. Esto es persistente y no falla.
+        if (res.ok && data.success) {
             localStorage.setItem('token', data.token); 
             console.log("✅ Autenticación exitosa. Token guardado.");
             window.location.href = '/autorecarga.html';
         } else {
-            msg.innerText = data.message || "Error al iniciar sesión.";
+            // Mostrar error específico que viene del servidor (ej: "Credenciales incorrectas")
+            msg.innerText = "Error: " + (data.message || "Usuario o contraseña inválidos.");
             msg.style.display = 'block';
+            console.warn("⚠️ Error de autenticación:", data.message);
         }
     } catch (error) {
-        console.error("❌ Error de red:", error);
-        msg.innerText = "Error crítico de conexión.";
+        // ERROR DE CONEXIÓN (El "Failed to fetch")
+        console.error("❌ Error de red / Fetch:", error);
+        msg.innerText = "Error crítico: No se pudo conectar al servidor. Revisa la consola (F12).";
         msg.style.display = 'block';
     }
 }
 
-// FUNCIÓN LOGOUT: Ahora borra el token
 async function logout() {
     localStorage.removeItem('token');
     window.location.href = '/login.html';
 }
 
-// PARA CADA PÁGINA (monitoreo1.html, etc):
-// Pon esto al principio para proteger la ruta
+// CORRECCIÓN LÓGICA: Si ya existe token, debe ir a la app, no al login
 const token = localStorage.getItem('token');
-if (token) {
-    // Si ya tienes token, no necesitas hacer login otra vez, ve al monitor
-    window.location.href = '/login.html';
+if (token && window.location.pathname.includes('login.html')) {
+    console.log("ℹ️ Token detectado, redirigiendo a autorecarga...");
+    window.location.href = '/autorecarga.html';
 }
 </script>
 </body>
