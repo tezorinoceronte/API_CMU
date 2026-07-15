@@ -129,7 +129,7 @@ async function manejarRecargas(tarea, connection) {
             const nuevoEstado = (resultado && resultado.tipo === 'COMPLETADO') ? 'COMPLETADO' : 'RECARGA_PENDIENTE_REGISTRO';
             
             await connection.execute(`
-                UPDATE cola_tareas 
+                UPDATE public.cola_tareas 
                 SET estado = ?, iccid = ?, linea_registrada = ?, fecha_recarga = ?, primer_evento = ?, resultado = ? 
                 WHERE id = ?`, 
                 [nuevoEstado, resultado.iccid || null, resultado.registrado || null, formatearFecha(resultado.fechaActivacion), resultado.primerEvento || null, JSON.stringify(resultado), tarea.id]
@@ -139,7 +139,7 @@ async function manejarRecargas(tarea, connection) {
             await ejecutarLoginTelcel(page, tarea.user_id);
             const resultado = await hacerClicEnDatosLinea(page, tarea.user_id, tarea.numero);
             await connection.execute(`
-                UPDATE cola_tareas SET estado = 'COMPLETADO', resultado = ? WHERE id = ?`, 
+                UPDATE public.cola_tareas SET estado = 'COMPLETADO', resultado = ? WHERE id = ?`, 
                 [JSON.stringify(resultado), tarea.id]
             );
         }
@@ -147,7 +147,7 @@ async function manejarRecargas(tarea, connection) {
         console.error("❌ Error grave en manejarRecargas:", e);
         // Garantizamos que el id exista antes de actualizar
         if (tarea && tarea.id) {
-            await connection.execute("UPDATE cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", [e.message, tarea.id]);
+            await connection.execute("UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", [e.message, tarea.id]);
         }
     }
 }
@@ -292,7 +292,7 @@ async function manejarBiometricos(tarea, connection) {
         }
     } catch (e) {
         console.error(`❌ [Manejador] ERROR EN TAREA ${tarea.id}:`, e.message);
-        await connection.execute("UPDATE cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", [e.message.substring(0, 255), tarea.id]);
+        await connection.execute("UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", [e.message.substring(0, 255), tarea.id]);
     }
 }
 
@@ -306,7 +306,7 @@ async function manejarBiometricos2(tarea, connection, estadoActual) {
             const page = await obtenerSesionCompleta(tarea.user_id, url);
             const res = await registrarLinea(page, tarea.numero, tarea.user_id, tarea.id);
             if (res?.requiereToken) {
-                await connection.execute("UPDATE cola_tareas SET estado = 'ESPERANDO_USER' WHERE id = ?", [tarea.id]);
+                await connection.execute("UPDATE public.cola_tareas SET estado = 'ESPERANDO_USER' WHERE id = ?", [tarea.id]);
             }
             return;
         }
@@ -325,7 +325,7 @@ async function manejarBiometricos2(tarea, connection, estadoActual) {
 
     } catch (err) {
         console.error("Error crítico en manejarBiometricos:", err);
-        await connection.execute("UPDATE cola_tareas SET estado = 'FALLO_TOKEN', resultado = ? WHERE id = ?", [err.message, tarea.id]);
+        await connection.execute("UPDATE public.cola_tareas SET estado = 'FALLO_TOKEN', resultado = ? WHERE id = ?", [err.message, tarea.id]);
     }
 }
 
@@ -358,7 +358,7 @@ async function manejarACT_ESIM(tarea, connection) {
                 // AQUÍ SOLO CAE SI FALLA PROCEDEREXTRACCION
                 console.error(`❌ [Manejador] Error específico en extracción ID ${tarea.id}:`, errExtraccion.message);
                 await connection.execute(
-                    "UPDATE cola_tareas SET estado = 'ACT_ESIM_FALLO', resultado = ? WHERE id = ?", 
+                    "UPDATE public.cola_tareas SET estado = 'ACT_ESIM_FALLO', resultado = ? WHERE id = ?", 
                     [errExtraccion.message.substring(0, 255), tarea.id]
                 );
                 return; // Terminamos aquí porque ya marcamos el fallo
@@ -371,7 +371,7 @@ async function manejarACT_ESIM(tarea, connection) {
         // ERROR GENERAL (Login o Activación)
         console.error(`❌ [Manejador] Error en activación ID ${tarea.id}:`, e.message);
         
-        const [rows] = await connection.execute("SELECT estado FROM cola_tareas WHERE id = ?", [tarea.id]);
+        const [rows] = await connection.execute("SELECT estado FROM public.cola_tareas WHERE id = ?", [tarea.id]);
         if (rows[0] && rows[0].estado !== 'ERROR') {
             await connection.execute(
                 "UPDATE cola_tareas SET estado = 'ACT_ESIM_FALLO', resultado = ? WHERE id = ?", 
