@@ -2,65 +2,41 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs-extra');
-const jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken'); // Necesario para el token11
 const bcrypt = require('bcrypt');
 const { pool } = require('./cola');
 
+
 const app = express();
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = 'clave_secreta_2026'; // Define esto aquí
+const screenshotsDir = path.join(__dirname, 'screenshots');
 
-// --- 1. PROTECCIÓN CONTRA CAÍDAS (CRÍTICO PARA RENDER) ---111
-process.on('uncaughtException', (err) => {
-    console.error('❌ EXCEPCIÓN NO CAPTURADA:', err);
-});
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ PROMESA RECHAZADA:', reason);
-});
+fs.ensureDirSync(screenshotsDir);
 
-// --- 2. CONFIGURACIÓN CORS ---
+// Configuración básica
 app.use(cors({
-    origin: '*', 
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    origin: '*', // Permite peticiones desde cualquier lugar
     credentials: true
 }));
-app.options('*', cors());
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
-// --- 3. CONFIGURACIÓN DE RUTAS Y ARCHIVOS ---
-const screenshotsDir = path.join(__dirname, 'screenshots');
-fs.ensureDirSync(screenshotsDir);
 app.use('/screenshots', express.static(screenshotsDir));
 
-// --- 4. MIDDLEWARE DE AUTENTICACIÓN ---
+// --- ESTE MIDDLEWARE REEMPLAZA A TU "AUTH" DE SESIÓN ---
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) return res.status(401).json({ error: "No autorizado" });
 
-    jwt.verify(token, 'clave_secreta_2026', (err, decoded) => {
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
         if (err) return res.status(403).json({ error: "Token inválido" });
-        req.user = decoded;
+        req.user = decoded; // Ahora tienes el usuario en req.user.id
         next();
     });
 };
-
-// --- AQUÍ IRÍAN TUS RUTAS (app.post, app.get, etc) ---
-
-// --- 5. INICIO DEL SERVIDOR (BINDING PARA RENDER) ---
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Servidor escuchando en http://0.0.0.0:${PORT}`);
-}).on('error', (err) => {
-    console.error('❌ ERROR AL INICIAR SERVIDOR:', err);
-});
-
-
-
-
-
 
 // --- TUS RUTAS ---
 app.post('/auth/login', async (req, res) => {
