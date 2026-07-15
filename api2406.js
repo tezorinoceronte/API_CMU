@@ -16,7 +16,9 @@ fs.ensureDirSync(screenshotsDir);
 
 // Configuración básica
 app.use(cors({
-    origin: '*', // Permite peticiones desde cualquier lugar
+    origin: 'https://apicomunicatec.mx', // <-- TU DOMINIO REAL
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
 }));
 
