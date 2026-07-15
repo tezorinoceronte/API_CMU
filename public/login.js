@@ -14,7 +14,7 @@ router.post('/login', async (req, res) => {
     }
 
     try {
-        // CORRECCIÓN 1: Usar .query en lugar de .execute
+        // CORRECCIÓN 1: Usar .query en lugar de .execute1
         // CORRECCIÓN 2: Usar $1 en lugar de ?
         const result = await pool.query('SELECT * FROM public.usuarios_act_cmu WHERE correo = $1', [correo]);
         
