@@ -35,13 +35,19 @@ app.use('/auth', authRoutes);
 // --- ESTE MIDDLEWARE REEMPLAZA A TU "AUTH" DE SESIÓN ---
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    console.log("DEBUG - Header recibido:", authHeader); // ¿Es null o llega algo?
+    
+    if (!authHeader) return res.status(401).json({ error: "No header" });
 
-    if (!token) return res.status(401).json({ error: "No autorizado" });
+    const token = authHeader.split(' ')[1];
+    console.log("DEBUG - Token extraído:", token); // ¿Se ve como una cadena larga de texto?
 
     jwt.verify(token, JWT_SECRET, (err, decoded) => {
-        if (err) return res.status(403).json({ error: "Token inválido" });
-        req.user = decoded; // Ahora tienes el usuario en req.user.id
+        if (err) {
+            console.log("DEBUG - Error de JWT:", err.message); // AQUÍ TE DIRÁ SI ES 'invalid signature'
+            return res.status(403).json({ error: "Token inválido" });
+        }
+        req.user = decoded;
         next();
     });
 };
