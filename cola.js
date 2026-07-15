@@ -1,14 +1,10 @@
-const mysql = require('mysql2/promise');
+// Nuevo contenido de cola.js
+const { Pool } = require('pg');
 
-// Configura aquí tus datos de acceso a MySQL
-const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root',      // Cambia si tienes otro usuario
-    password: '',      // Pon tu contraseña si la tienes
-    database: 'sistema_bot',
-    waitForConnections: true,
-    connectionLimit: 50,
-    queueLimit: 0
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  family: 4
 });
 
 module.exports = { pool };
