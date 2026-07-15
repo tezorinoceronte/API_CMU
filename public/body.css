@@ -1,0 +1,193 @@
+
+body { font-family: sans-serif; display: flex; justify-content: center; padding: 20px; background-color: #f4f4f9; }
+.card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+button { width: 100%; padding: 12px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+button:disabled { background-color: #ccc; }
+
+/* Animaciones */
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes girar { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Loaders */
+.loader { border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; display: none; }
+.loader-radial { border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 10px auto; display: none; }
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; margin-right: 5px; }
+.spinner2 { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; margin-right: 5px; }
+
+/* Monitor y Botones */
+#monitorReal { width: 50%; margin-top: 15px; border-radius: 8px; background: black; display: block; }
+.btn-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn-top { flex: 1; min-width: 45%; padding: 12px; cursor: pointer; border: none; border-radius: 8px; color: white; font-weight: bold; }
+.btn-full { width: 100%; padding: 12px; cursor: pointer; border: none; border-radius: 8px; color: white; font-weight: bold; margin-top: 10px; }
+
+/* Modal Token */
+#modalToken { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px); background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.05) 10px, rgba(0,0,0,0.05) 20px); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.modal-content { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); text-align: center; max-width: 400px; width: 90%; }
+
+/* Spinner QR */
+#spiner { width: 50px; height: 50px; border-radius: 50%; transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1); background: conic-gradient(#3498db 0%, #f3f3f3 0%); border: 4px solid #f3f3f3; margin: 15px auto; animation: girar 2s linear infinite; }
+/* Fondo oscuro con blur */
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(16, 16, 242, 0.108);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    /* Fondo con diagonales */
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(31, 1, 57, 0.112) 0px,
+        rgba(4, 119, 241, 0.112) 10px,
+        transparent 10px,
+        transparent 20px
+    );
+}
+/* Contenedor del cargador */
+.loader-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px;
+    background: #ffffff;
+   
+    margin: 20px auto;
+    max-width: 300px;
+}
+
+/* El spinner elegante */
+.spinner-pro {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #2563eb; /* Un azul profesional */
+    border-radius: 50%;
+    animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Texto de estado */
+.loader-text {
+    margin-top: 15px;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    color: #4b5563;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+
+
+    #overlay_activador_comunicatec 
+    {
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 50, 150, 0.6); backdrop-filter: blur(8px); z-index: 999;
+        background-image: repeating-linear-gradient(45deg, #0033cc 0, #0033cc 10px, #0055ff 10px, #0055ff 20px);
+    }
+
+    #modal_activador_chip {
+        display: none; position: fixed; top: 20%; left: 25%; width: 350px;
+        background: white; padding: 25px; border-radius: 15px; z-index: 1000;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+
+    .loader-radial { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 10px auto; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+.loader_sipner_act_individual_container {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    /* AGREGA ESTO PARA CENTRAR EL CONTENEDOR EN LA PÁGINA */
+    margin: 0 auto; 
+    
+    /* Esto sigue centrando los elementos internos (círculos) */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Base común para los spinners */
+[class^="loader_sipner_act_individual_"] {
+    position: absolute;
+    border-radius: 50%;
+    box-sizing: border-box;
+}
+
+/* Spinner Externo - Azul Rey (Giro horario) */
+.loader_sipner_act_individual_outer {
+    width: 100%;
+    height: 100%;
+    border: 8px solid transparent;
+    border-top-color: #0000CD; /* Azul Rey */
+    border-right-color: #0000CD;
+    animation: loader_sipner_act_individual_spin_cw 1.5s linear infinite;
+}
+
+/* Spinner Interno - Azul Claro (Giro anti-horario) */
+.loader_sipner_act_individual_inner {
+    width: 60%;
+    height: 60%;
+    border: 6px solid transparent;
+    border-left-color: #87CEFA; /* Azul Claro */
+    border-bottom-color: #87CEFA;
+    animation: loader_sipner_act_individual_spin_ccw 1s linear infinite;
+}
+
+/* Animaciones específicas */
+@keyframes loader_sipner_act_individual_spin_cw {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes loader_sipner_act_individual_spin_ccw {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(-360deg); }
+}
+
+  .contenedor-botones {
+    display: flex;
+    justify-content: space-between;
+    width: 400px;
+    margin: 20px auto;
+    font-family: Arial, sans-serif;
+  }
+
+  .btn-apk-act {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 31%; /* Ajustado a 125px como pediste */
+    
+    padding: 10px;
+    background-color: #002954; /* Azul rey */
+    color: white;
+    border: none;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: transform 0.2s, background-color 0.2s;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  }
+
+  .btn-apk-act:hover {
+    background-color: #6a7607;
+    transform: scale(1.03);
+  }
+
+  .btn-apk-act img {
+    width: 70%; /* Tamaño ajustado para que quepa bien */
+    height: auto;
+    margin-bottom: 10px;
+    filter: brightness(0) invert(1); /* Esto hace que los iconos se vean blancos si son oscuros */
+  }
+
+  .btn-apk-act span {
+    font-size: 16px;
+    font-weight: bold;
+  }

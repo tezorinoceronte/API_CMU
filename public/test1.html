@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <button id="btn-prueba">PROBAR API</button>
+    <script>
+document.getElementById('btn-prueba').onclick = async () => {
+    try {
+        const response = await fetch('http://localhost:3000/api/solicitar-recarga', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // MODIFICACIÓN AQUÍ: Enviamos 'id' y 'nuevo_estado'
+            body: JSON.stringify({
+                id: 14,
+                nuevo_estado: 'ERROR' // O el estado que necesites según tu ENUM
+            })
+        });
+        const data = await response.json();
+        console.log('Respuesta del servidor:', data);
+        alert(JSON.stringify(data));
+    } catch (err) {
+        console.error('Error de conexión:', err);
+        alert('Error: ' + err.message);
+    }
+};
+    </script>
+</body>
+</html>
+
+<div class="loader_sipner_act_individual_container">
+       <div class="loader_sipner_act_individual_outer"></div>
+       <div class="loader_sipner_act_individual_inner"></div>
+</div>
+<STYLE>
+.loader_sipner_act_individual_container {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Base común para los spinners */
+[class^="loader_sipner_act_individual_"] {
+    position: absolute;
+    border-radius: 50%;
+    box-sizing: border-box;
+}
+
+/* Spinner Externo - Azul Rey (Giro horario) */
+.loader_sipner_act_individual_outer {
+    width: 100%;
+    height: 100%;
+    border: 8px solid transparent;
+    border-top-color: #19e3a3; /* Azul Rey */
+    border-right-color: #0000CD;
+    animation: loader_sipner_act_individual_spin_cw 1.5s linear infinite;
+}
+
+/* Spinner Interno - Azul Claro (Giro anti-horario) */
+.loader_sipner_act_individual_inner {
+    width: 50%;
+    height: 50%;
+    border: 4px solid transparent;
+    border-left-color: #87CEFA; /* Azul Claro */
+    border-bottom-color: #87CEFA;
+    animation: loader_sipner_act_individual_spin_ccw 1s linear infinite;
+}
+
+/* Animaciones específicas */
+@keyframes loader_sipner_act_individual_spin_cw {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes loader_sipner_act_individual_spin_ccw {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(-360deg); }
+}</STYLE>
+
+
+<div class="contenedor-botones">
+  
+  <button class="btn-apk-act">
+    <img src="img/simcard.png" alt="SIM CARD">
+    <span>SIM CARD</span>
+  </button>
+  
+  <button class="btn-apk-act">
+    <img src="img/esim.png" alt="eSIM">
+    <span>eSIM</span>
+  </button>
+  
+  <button class="btn-apk-act">
+    <img src="img/cambio.png" alt="CAMBIO">
+    <span>Cambiate a <br> telcel</span>
+  </button>
+
+</div>
+
+<style>
+  .contenedor-botones {
+    display: flex;
+    justify-content: space-between;
+    width: 400px;
+    margin: 20px auto;
+    font-family: Arial, sans-serif;
+  }
+
+  .btn-apk-act {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 31%; /* Ajustado a 125px como pediste */
+    
+    padding: 10px;
+    background-color: #002954; /* Azul rey */
+    color: white;
+    border: none;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: transform 0.2s, background-color 0.2s;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  }
+
+  .btn-apk-act:hover {
+    background-color: #004494;
+    transform: scale(1.03);
+  }
+
+  .btn-apk-act img {
+    width: 70%; /* Tamaño ajustado para que quepa bien */
+    height: auto;
+    margin-bottom: 10px;
+    filter: brightness(0) invert(1); /* Esto hace que los iconos se vean blancos si son oscuros */
+  }
+
+  .btn-apk-act span {
+    font-size: 16px;
+    font-weight: bold;
+  }
+</style>

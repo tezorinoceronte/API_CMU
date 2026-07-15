@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COMUNICATEC</title>
+
+    <style id="estilo-blindaje">
+        body { display: none !important; }
+    </style>
+
+    <link rel="stylesheet" href="body.css">
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login.html';
+        } else {
+            fetch('http://localhost:3000/api/check-session', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.active) {
+                    // Token válido: quitamos el blindaje
+                    document.getElementById('estilo-blindaje').remove();
+                    // Ocultamos el loader inicial si existe
+                    const loader = document.getElementById('loader-inicial');
+                    if (loader) loader.style.display = 'none';
+                } else {
+                    localStorage.removeItem('token');
+                    window.location.href = '/login.html';
+                }
+            })
+            .catch(() => window.location.href = '/login.html');
+        }
+    </script>
+</head>
+<body>
+    <div id="loader-inicial" style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); font-family:sans-serif; color:#666;">
+        Cargando seguridad...
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="/body_utils.js"></script>
+
+
+<div id="qr-popup" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index: 2000;">
+    <div style="background:white; padding:30px; border-radius:15px; width:420px; text-align:center; position:relative; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+       
+        <span onclick="document.getElementById('qr-popup').style.display='none'"
+              style="position:absolute; top:10px; right:15px; cursor:pointer; font-size:24px; color:#555;">&times;</span>
+       
+       
+        <h6>Escanea este QR o con un smartphone o tablet para validar tu identidad</h6>
+        <img id="img-qr-popup" src="" style="width:70%; margin:5px 0; border: 1px solid #ddd;">
+         <h5>Porfavor asegurate de tener tu IDENTIFICACION oficial vigente</h5>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+                <button id="btn-continuar-popup" style="background:#28a745;">Continuar en Dispositivo</button>
+            <button onclick="document.getElementById('qr-popup').style.display='none'"  style="background:#6c757d;">CERRAR</button>
+       
+        </div>
+    </div>
+</div>
+
+
+
+
+<div id="panelConsulta" class="card">
+     <div style="text-align: center; margin-bottom: 15px;">
+        <img src="img/logo.png" alt="Logo Comunicatec" style="width: 170px; height: auto;">
+    </div>
+    <h3>Validación de Número</h3>
+    <input type="number" id="numInput" maxlength="10" placeholder="10 dígitos" inputmode="numeric">
+    <button id="btnValidar" onclick="validarforce()" >Consultar</button>
+    <div id="loader" class="loader"></div>
+    <div id="alertBox"></div>
+    <div id="contenedor-resultado" style="text-align: center; margin-top: 20px;"></div>
+
+
+<div id="seccion-monitoreo" style="width: 100%; border: none;">
+    <iframe src="monitoreo.html" 
+            style="width: 100%; height: 300px; border: none; border-radius: 15px;" 
+            title="Monitor de Activaciones">
+    </iframe>
+
+</div>
+
+
+<!-- ACT FISICA O ESIM -->
+
+
+<div id="controles_activacion_sistema">
+    <h4> Servicios individuales </h4>
+<div class="contenedor-botones">
+  
+  <button class="btn-apk-act">
+    <img onclick="abrir_modal_activacion('FISICA')" src="img/simcard.png" alt="SIM CARD">
+    <span>SIM CARD</span>
+  </button>
+  
+  <button class="btn-apk-act">
+    <img onclick="abrir_modal_activacion('ESIM')" src="img/esim.png" alt="eSIM">
+    <span>eSIM</span>
+  </button>
+  
+  <button class="btn-apk-act">
+    <img src="img/cambio.png" alt="CAMBIO">
+    <span>Cambiate a <br> telcel</span>
+  </button>
+
+</div>
+
+<a href="alta_usuario.html">CREAR USUARIO</a>
+   
+</div>
+
+<div id="overlay_activador_comunicatec"></div>
+<div id="modal_activador_chip">
+    <h3 id="titulo_modal_proceso"></h3>
+    <input list="lista_ciudades_mexico" id="input_ciudad_usuario" placeholder="Escribe tu ciudad" style="width:100%">
+    <datalist id="lista_ciudades_mexico"></datalist>
+    <div id="contenedor_campos_dinamicos" style="margin-top: 15px;"></div>
+    <div style="margin-top: 20px;" id="area_botones_modal">
+        <button onclick="ejecutar_envio_tarea()">Enviar Solicitud</button>
+        <button onclick="cerrar_modal()">Cancelar</button>
+    </div>
+</div>
+
+</div>
+
+
+<div id="panelAcciones" class="card" style="display:none;">
+   
+    <h3>Acciones Disponibles</h3>
+    <input type="number" id="campoNumero" placeholder="Número para la acción" readonly >
+    <div id="iccidResult" style="margin-bottom: 15px; font-weight: bold;"></div>
+   
+    <div id="actionLoader" class="loader-radial"></div>
+    <div id="statusMessage" style="font-weight: bold; margin-bottom: 10px;"></div>
+<div id="btnContainer">
+    <div style="display: none; gap: 10px; margin-bottom: 10px;">
+        <button class="btn-top" style="background: #4169E1; flex: 1;" onclick="ejecutarAccion('RECARGA', event)">1. RECARGA</button>
+        <button class="btn-top" style="background: #00CED1; flex: 1;" onclick="ejecutarAccion('SIN_REGISTRO', event)">2. SIN REGISTRO</button>
+    </div>
+    <button class="btn-full" style="background: #40e0b8; width: 100%;" onclick="ejecutarAccion('BIOMETRICOS', event)">3. REGISTRAR BIOMÉTRICOS</button>
+</div>
+    <div id="resultadoAccion" style="margin-top: 20px; padding: 0px; border: 1px solid #ddd; border-radius: 8px; display: none;">
+    <h5>Resultado del Proceso</h5>
+    <p><strong>Fecha de Recarga:</strong> <span id="resFecha"></span></p>
+    <p><strong>Cliente Registrado:</strong> <span id="resRegistrado"></span></p>
+    <p id="resMensaje" style="color: #007bff; font-weight: bold;"></p>
+</div>
+</div>
+
+<div id="resultadoAccion-token" style="display: none;"> aqui estan los resultados de acciones token 
+
+</div>
+
+
+
+
+<div id="modalToken" style="display:none; position:fixed; top:20%; left:30%; width:40%; padding:20px; background:#fff; border:1px solid #ccc; box-shadow:0 0 10px #000; z-index:1000;">
+    <h3>⚠️ Se requiere Token de Validación</h3>
+    <p id="mensajeError" style="color:red; font-weight:bold;"></p>
+    
+    <input type="text" id="inputToken" placeholder="Ingresa el token recibido" style="width:100%; padding:10px; margin-bottom:10px;">
+    
+    <button onclick="enviarToken()">Enviar Token</button>
+</div>
+</body>
+</html>

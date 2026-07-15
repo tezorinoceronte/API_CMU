@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro de Usuarios</title>
+    <style>
+        .contenedor-movil { max-width: 400px; margin: 20px auto; padding: 20px; font-family: sans-serif; }
+        .info-usuario { background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
+        input, select, button { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        .btn-guardar { background-color: #007bff; color: white; font-weight: bold; border: none; cursor: pointer; }
+        .btn-logout { background-color: #dc3545; color: white; border: none; margin-top: 20px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="contenedor-movil">
+    <div class="info-usuario" id="infoUsuario">
+        <strong>Nombre:</strong> <span id="displayNombre">Cargando...</span><br>
+        <strong>Tipo:</strong> <span id="displayRol">Cargando...</span><br>
+        <strong>Estado:</strong> <span id="displayEstado">Cargando...</span><br>
+        <strong>Municipio:</strong> <span id="displayMunicipio">Cargando...</span><br>
+        <strong>Registrado por:</strong> <span id="displayCreador">Cargando...</span>
+    </div>
+
+    <h2>Registro de Usuarios</h2>
+    <form id="formRegistro">
+        <input type="text" id="nombre" placeholder="Nombre completo" required>
+        <input type="text" id="correo" placeholder="ID o Correo" required>
+        <input type="password" id="password" placeholder="Contraseña" required>
+        
+        <select id="rol" required onchange="actualizarVisibilidad()">
+            <option value="">Seleccione rol...</option>
+        </select>
+
+        <div id="divEstado" style="display:none;">
+            <input type="text" id="estado" placeholder="Estado">
+        </div>
+        <div id="divMunicipio" style="display:none;">
+            <input type="text" id="municipio" placeholder="Municipio">
+        </div>
+        
+        <button type="submit" class="btn-guardar">Registrar Usuario</button>
+    </form>
+
+    <div id="mensaje" style="margin-top: 15px; padding: 10px; border-radius: 8px; display: none;"></div>
+    <button type="button" id="btnLogout" class="btn-logout" onclick="logout()">Cerrar Sesión</button>
+</div>
+
+<script>
+    const API_URL = 'http://localhost:3000';
+
+    async function cargarPerfil() {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/auth/me`, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                document.getElementById('displayNombre').innerText = data.nombre;
+                document.getElementById('displayRol').innerText = data.rol;
+                document.getElementById('displayEstado').innerText = data.estado || 'N/A';
+                document.getElementById('displayMunicipio').innerText = data.municipio || 'N/A';
+                document.getElementById('displayCreador').innerText = data.creado_por || 'Sistema';
+                
+                if (data.rol === 'cliente') { window.location.href = '/api'; return; }
+
+                const select = document.getElementById('rol');
+                select.innerHTML = '<option value="">Seleccione rol...</option>';
+                
+                if (data.rol === 'admin') {
+                    select.innerHTML += '<option value="supervisor">Supervisor</option><option value="vendedor">Vendedor</option><option value="cliente">Cliente</option>';
+                } else if (data.rol === 'supervisor') {
+                    select.innerHTML += '<option value="vendedor">Vendedor</option><option value="cliente">Cliente</option>';
+                } else if (data.rol === 'vendedor') {
+                    select.innerHTML += '<option value="cliente">Cliente</option>';
+                }
+            } else {
+                window.location.href = '/login.html';
+            }
+        } catch (err) { console.error(err); }
+    }
+
+    function actualizarVisibilidad() {
+        const rol = document.getElementById('rol').value;
+        document.getElementById('divEstado').style.display = (rol === 'supervisor' || rol === 'vendedor' || rol === 'cliente') ? 'block' : 'none';
+        document.getElementById('divMunicipio').style.display = (rol === 'vendedor' || rol === 'cliente') ? 'block' : 'none';
+    }
+
+    document.getElementById('formRegistro').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_URL}/auth/registro`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token 
+            },
+            body: JSON.stringify({
+                nombre: document.getElementById('nombre').value,
+                correo: document.getElementById('correo').value,
+                password: document.getElementById('password').value,
+                rol: document.getElementById('rol').value,
+                estado: document.getElementById('estado').value,
+                municipio: document.getElementById('municipio').value
+            })
+        });
+
+        const data = await res.json();
+        const msgDiv = document.getElementById('mensaje');
+        msgDiv.style.display = 'block';
+        msgDiv.innerText = data.message;
+        msgDiv.style.backgroundColor = data.success ? '#d4edda' : '#f8d7da';
+        msgDiv.style.color = data.success ? '#155724' : '#721c24';
+        if (data.success) {
+            document.getElementById('formRegistro').reset();
+            actualizarVisibilidad();
+        }
+    });
+
+    function logout() {
+        localStorage.removeItem('token');
+        window.location.href = '/login.html';
+    }
+
+    cargarPerfil();
+</script>
+</body>
+</html>

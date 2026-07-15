@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Consulta Telcel</title>
+
+    <style>
+
+        body { font-family: sans-serif; display: flex; justify-content: center; padding: 20px; background-color: #f4f4f9; }
+
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+
+        button { width: 100%; padding: 12px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+
+        button:disabled { background-color: #ccc; }
+
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; display: none; }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        #monitorReal { width: 50%; margin-top: 15px; border-radius: 8px; background: black; display: block; }
+
+   
+
+    /* botones */
+
+        .btn-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+
+    .btn-top { flex: 1; min-width: 45%; padding: 12px; cursor: pointer; border: none; border-radius: 8px; color: white; font-weight: bold; }
+
+    .btn-full { width: 100%; padding: 12px; cursor: pointer; border: none; border-radius: 8px; color: white; font-weight: bold; margin-top: 10px; }
+
+   
+
+    /* Loader radial */
+
+    .loader-radial { border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 10px auto; display: none; }
+
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+   
+
+   .spinner {
+
+    display: inline-block;
+
+    width: 12px;
+
+    height: 12px;
+
+    border: 2px solid rgba(255,255,255,.3);
+
+    border-radius: 50%;
+
+    border-top-color: #fff;
+
+    animation: spin 1s ease-in-out infinite;
+
+    margin-right: 5px;
+
+}
+
+#modalToken {
+
+   
+
+    position: fixed;
+
+    top: 0%; left: 0%; width: 100%; height: 100%;
+
+    background: rgba(255, 255, 255, 0.2);
+
+    backdrop-filter: blur(10px); /* Efecto Blur */
+
+    /* Fondo con diagonales */
+
+    background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.05) 10px, rgba(0,0,0,0.05) 20px);
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    z-index: 1000;
+
+}
+
+
+
+.modal-content {
+
+    background: white;
+
+   padding: 20px;
+
+    margin-top: 10%;
+
+    margin-left: 25%;
+
+    border-radius: 15px;
+
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+
+    text-align: center;
+
+    max-width: 400px;
+
+}
+
+@keyframes girar {
+
+    0% { transform: rotate(0deg); }
+
+    100% { transform: rotate(360deg); }
+
+}
+
+#spiner-qr {
+
+    width: 50px;
+
+    height: 50px;
+
+    border-radius: 50%;
+
+    /* Esto es lo que hace que la transición sea fluida */
+
+    transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+
+    background: conic-gradient(#3498db 0%, #f3f3f3 0%);
+
+    border: 4px solid #f3f3f3;
+
+    margin: 15px auto;
+
+    animation: girar 2s linear infinite;
+
+}
+
+   </style>
+
+</head>
+
+<body>
+
+<div id="qr-popup" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index: 2000;">
+
+    <div style="background:white; padding:30px; border-radius:15px; width:420px; text-align:center; position:relative; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+
+       
+
+        <span onclick="document.getElementById('qr-popup').style.display='none'"
+
+              style="position:absolute; top:10px; right:15px; cursor:pointer; font-size:24px; color:#555;">&times;</span>
+
+       
+
+       
+
+        <h6>Escanea este QR o con un smartphone o tablet para validar tu identidad</h6>
+
+        <img id="img-qr-popup" src="" style="width:70%; margin:5px 0; border: 1px solid #ddd;">
+
+         <h5>Porfavor asegurate de tener tu IDENTIFICACION oficial vigente</h5>
+
+        <div style="display:flex; flex-direction:column; gap:5px;">
+
+                <button id="btn-continuar-popup" style="background:#28a745;">Continuar en Dispositivo</button>
+
+            <button onclick="document.getElementById('qr-popup').style.display='none'"  style="background:#6c757d;">CERRAR</button>
+
+       
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+<div id="panelConsulta" class="card">
+
+    <h3>Validación de Número</h3>
+
+    <input type="number" id="numInput" maxlength="10" placeholder="10 dígitos" inputmode="numeric">
+
+    <button id="btnValidar" onclick="validarforce()" disabled>Consultar</button>
+
+    <div id="loader" class="loader"></div>
+
+    <div id="alertBox"></div>
+
+</div>
+
+
+
+<div id="panelAcciones" class="card" style="display:none;">
+
+
+
+
+
+        <div id="modalToken" style="display:none;">
+
+    <div class="modal-content">
+
+     <div id="seccionToken">
+
+    <h3>Ingresar Token de Validación</h3>
+
+    <input type="text" id="inputToken" placeholder="Escribe el token aquí">
+
+    <div id="contenedorBotonContinuar">
+
+        <button onclick="enviarToken()">Confirmar Token</button>
+
+    </div>
+
+</div>
+
+
+
+     </div>
+
+</div>
+
+
+
+
+
+    <h3>Acciones Disponibles</h3>
+
+    <input type="number" id="campoNumero" placeholder="Número para la acción" readonly >
+
+    <div id="iccidResult" style="margin-bottom: 15px; font-weight: bold;"></div>
+
+   
+
+    <div id="actionLoader" class="loader-radial"></div>
+
+    <div id="statusMessage" style="font-weight: bold; margin-bottom: 10px;"></div>
+
+
+
+
+
+
+
+
+
+
+
+    <div id="btnContainer" class="btn-grid">
+
+        <button class="btn-top" style="background: #4169E1;" onclick="ejecutarAccion('RECARGA', event)">1. RECARGA</button>
+
+        <button class="btn-top" style="background: #00CED1;" onclick="ejecutarAccion('SIN_REGISTRO', event)">2. SIN REGISTRO</button>
+
+        <button class="btn-full" style="background: #40e0b8;" onclick="ejecutarAccion('BIOMETRICOS', event)">3. REGISTRAR BIOMÉTRICOS</button>
+
+    </div>
+
+
+
+    <div id="resultadoAccion" style="margin-top: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; display: none;">
+
+    <h5>Resultado del Proceso</h5>
+
+    <p><strong>Fecha de Recarga:</strong> <span id="resFecha"></span></p>
+
+    <p><strong>Cliente Registrado:</strong> <span id="resRegistrado"></span></p>
+
+    <p id="resMensaje" style="color: #007bff; font-weight: bold;"></p>
+
+</div>
+
+</div>
+
+
+
+
+
+<script>
+
+const API_URL = 'http://localhost:3000';
+
+function obtenerIdUsuario() {
+    let id = localStorage.getItem('vendedor_id');
+    if (!id) {
+        id = 'vend_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('vendedor_id', id);
+    }
+    return id;
+}
+
+// Función reset para limpiar la UI
+function resetUI() {
+    document.getElementById('btnValidar').disabled = false;
+    document.getElementById('loader').style.display = 'none';
+}
+
+async function validarforce() {
+    const input = document.getElementById('numInput');
+    const btn = document.getElementById('btnValidar');
+    const alertBox = document.getElementById('alertBox');
+    const loader = document.getElementById('loader');
+
+    if (!input.value) return alert("Ingresa un número.");
+
+    btn.disabled = true;
+    loader.style.display = 'block';
+    alertBox.innerHTML = "⏳ Enviando tarea al sistema...";
+
+    try {
+        const res = await fetch(`${API_URL}/api/solicitar-consulta`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                numero: input.value, 
+                userId: obtenerIdUsuario(), // Conectado al usuario
+                portal: 'FORCE' 
+            })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        const tareaId = data.tareaId;
+        alertBox.innerHTML = "✅ Tarea #" + tareaId + " creada. Esperando...";
+
+        const intervalo = setInterval(async () => {
+            const check = await fetch(`${API_URL}/api/verificar-estado/${tareaId}`);
+            const resCheck = await check.json();
+
+            if (resCheck.estado === 'COMPLETADO') {
+                clearInterval(intervalo);
+                
+                // Parseo seguro del resultado que viene de la BD
+                const resultado = typeof resCheck.resultado === 'string' 
+                                  ? JSON.parse(resCheck.resultado) 
+                                  : resCheck.resultado;
+                
+                // Mostramos el resultado en el panel y cambiamos de vista
+                procesarResultadoExitoso(resultado);
+                
+            } else if (resCheck.estado === 'ERROR') {
+                clearInterval(intervalo);
+                alertBox.innerHTML = "❌ Error en el proceso.";
+                resetUI();
+            }
+        }, 2000);
+
+    } catch (e) {
+        alertBox.innerHTML = "❌ Error: " + e.message;
+        resetUI();
+    }
+}
+// --- FUNCIONES AUXILIARES NECESARIAS ---
+
+
+
+function procesarResultadoExitoso(resultado) {
+
+    const alertBox = document.getElementById('alertBox');
+
+   
+
+    // Suponiendo que el resultado es un JSON con {iccid: "..."}
+
+    if (resultado && resultado.iccid) {
+
+        document.getElementById('panelConsulta').style.display = 'none';
+
+        document.getElementById('panelAcciones').style.display = 'block';
+
+        document.getElementById('iccidResult').innerText = "ICCID: " + resultado.iccid;
+
+        document.getElementById('campoNumero').value = document.getElementById('numInput').value;
+
+    } else {
+
+        alertBox.innerHTML = "<div style='color:orange;'>⚠️ No se obtuvo ICCID en la respuesta.</div>";
+
+    }
+
+   
+
+    document.getElementById('loader').style.display = 'none';
+
+    document.getElementById('btnValidar').disabled = false;
+
+}
+
+
+
+function resetUI() {
+
+    document.getElementById('loader').style.display = 'none';
+
+    document.getElementById('btnValidar').disabled = false;
+
+}
+
+
+
+
+
+
+
+// Función para actualizar la imagen en momentos específicos
+
+function actualizarImagenSecuencial(userId, paso) {
+
+    const monitorImg = document.getElementById('monitor2');
+
+   
+
+    // Lista de tiempos en milisegundos
+
+    const tiempos = [3000, 5000];
+
+
+
+    tiempos.forEach(tiempo => {
+
+        setTimeout(() => {
+
+            if (monitorImg) {
+
+                // Añadimos un timestamp (?t=...) para que el navegador cargue la imagen nueva
+
+                monitorImg.src = `${API_URL}/screenshots/${userId}_${paso}.png?t=${new Date().getTime()}`;
+
+                console.log(`🔄 [Monitor] Imagen actualizada en ${tiempo}ms`);
+
+            }
+
+        }, tiempo);
+
+    });
+
+}
+
+document.getElementById('numInput').addEventListener('input', function(e) {
+
+    // 1. Limpia: Remueve cualquier caracter que no sea número
+
+    this.value = this.value.replace(/[^0-9]/g, '');
+
+
+
+    // 2. Control de longitud (Asegura el máximo de 10)
+
+    if (this.value.length > 10) {
+
+        this.value = this.value.slice(0, 10);
+
+    }
+
+
+
+    // 3. Control del botón: Solo habilitar si son 10 dígitos exactos
+
+    const btn = document.getElementById('btnValidar');
+
+    btn.disabled = (this.value.length !== 10);
+
+});
+
+// Listener para habilitar/deshabilitar el botón
+
+document.getElementById('numInput').addEventListener('input', function() {
+
+    const btn = document.getElementById('btnValidar');
+
+    // Habilita el botón solo si la longitud es exactamente 10
+
+    if (this.value.length === 10) {
+
+        btn.disabled = false;
+
+    } else {
+
+        btn.disabled = true;
+
+    }
+
+});
+
+
+
+
+
+// Función auxiliar para manejar el éxito
+
+function procesarResultadoExitoso(resultado) {
+
+    if (resultado && resultado.iccid) {
+
+        document.getElementById('panelConsulta').style.display = 'none';
+
+        document.getElementById('panelAcciones').style.display = 'block';
+
+        document.getElementById('iccidResult').innerText = "ICCID: " + resultado.iccid;
+
+        document.getElementById('campoNumero').value = document.getElementById('numInput').value;
+
+    } else {
+
+        document.getElementById('alertBox').innerHTML = `<div style='color:orange;'>⚠️ No se obtuvo ICCID.</div>`;
+
+    }
+
+    document.getElementById('loader').style.display = 'none';
+
+    document.getElementById('btnValidar').disabled = false;
+
+}
+
+
+
+
+
+// Esta función vive en tu archivo de JS externo
+
+function controlarSpinner(mostrar) {
+
+    const loader = document.getElementById('loader');
+
+    if (mostrar) {
+
+        loader.style.display = 'flex'; // O 'block', según tu CSS
+
+    } else {
+
+        loader.style.display = 'none';
+
+    }
+
+}
+
+
+
+
+
+async function ejecutarAccion(tipo, event) {
+
+    if (!event || !event.target) {
+
+        console.error("Error: Falta el parámetro 'event' en la llamada a ejecutarAccion");
+
+        return;
+
+    }
+
+
+
+    const btnPresionado = event.target;
+
+    const campoNumero = document.getElementById('campoNumero');
+
+   
+
+    // Validación de seguridad antes de continuar
+
+    if (!campoNumero) {
+
+        alert("Error: No se encontró el campo de número en la interfaz.");
+
+        return;
+
+    }
+
+
+
+    const todosLosBotones = document.querySelectorAll('button');
+
+    todosLosBotones.forEach(b => b.disabled = true);
+
+   
+
+    const textoOriginal = btnPresionado.innerHTML;
+
+    btnPresionado.innerHTML = `<span class="spinner"></span> Procesando...`;
+
+
+
+    const datos = {
+
+        userId: obtenerIdUsuario(),
+
+        numero: campoNumero.value,
+
+        tipo: tipo
+
+    };
+
+   
+
+    const endpoint = (tipo === 'BIOMETRICOS') ? '/api/registro-linea' : '/api/ejecutar-accion';
+
+   
+
+    try {
+
+        const res = await fetch(`${API_URL}${endpoint}`, {
+
+            method: 'POST',
+
+            headers: { 'Content-Type': 'application/json' },
+
+            body: JSON.stringify(datos)
+
+        });
+
+
+
+        const resultado = await res.json();
+
+
+
+        if (resultado.status === 'success') {
+
+            const divRes = document.getElementById('resultadoAccion');
+
+            // Usamos encadenamiento opcional (?.) para evitar errores si los datos no vienen completos
+
+            document.getElementById('resFecha').innerText = resultado.data?.fecha || "N/A";
+
+            document.getElementById('resRegistrado').innerText = resultado.data?.registrado || "N/A";
+
+            document.getElementById('resMensaje').innerHTML = resultado.data?.mensaje || "Proceso finalizado con éxito.";
+
+            divRes.style.display = 'block';
+
+        } else {
+
+            alert("❌ Error del servidor: " + (resultado.message || "Error desconocido"));
+
+        }
+
+    } catch (error) {
+
+        console.error("Error en petición:", error);
+
+        alert("❌ Error de conexión con el servidor.");
+
+    } finally {
+
+        todosLosBotones.forEach(b => b.disabled = false);
+
+        btnPresionado.innerHTML = textoOriginal;
+
+    }
+
+}
+
+
+
+
+
+function updateUI(message, percent = 0) {
+
+    const loader = document.getElementById('loader-radial');
+
+    const text = document.getElementById('loader-text');
+
+   
+
+    // Si el porcentaje es 0, ocultamos el círculo; si hay, lo mostramos
+
+    if (loader) {
+
+        loader.style.display = 'block';
+
+        loader.style.background = `conic-gradient(#3498db ${percent}%, #f3f3f3 ${percent}%)`;
+
+    }
+
+    if (text) text.innerText = message;
+
+}
+
+
+
+
+
+
+
+async function enviarToken() {
+
+    const tokenInput = document.getElementById('inputToken')?.value;
+
+    const contenedorBoton = document.getElementById('contenedorBotonContinuar');
+
+   
+
+    if (!tokenInput || tokenInput.trim() === "") {
+
+        alert("Por favor, ingresa el token.");
+
+        return;
+
+    }
+
+
+
+    // 1. Mostrar estado de carga inicial con el nuevo ID spiner-qr
+
+  contenedorBoton.innerHTML = `
+
+    <div style="display:flex; flex-direction:column; align-items:center; padding:10px;">
+
+        <div id="spiner-qr" style="
+
+            width:50px;
+
+            height:50px;
+
+            border-radius:50%;
+
+            transition: background 0.5s ease;
+
+            background: conic-gradient(#3498db 0%, #f3f3f3 0%);
+
+            position: relative;
+
+            margin-bottom:10px;
+
+        ">
+
+            <div style="width:40px; height:40px; background: white; border-radius: 50%; position: absolute; top: 5px; left: 5px;"></div>
+
+        </div>
+
+        <p id="status-text">Iniciando proceso...</p>
+
+    </div>
+
+`;
+
+
+
+    try {
+
+        const response = await fetch(`${API_URL}/api/confirmar-token`, {
+
+            method: 'POST',
+
+            headers: { 'Content-Type': 'application/json' },
+
+            body: JSON.stringify({
+
+                token: tokenInput,
+
+                userId: obtenerIdUsuario()
+
+            })
+
+        });
+
+
+
+        const reader = response.body.getReader();
+
+        const decoder = new TextDecoder();
+
+        let finalData = null;
+
+
+
+        while (true) {
+
+            const { value, done } = await reader.read();
+
+            if (done) break;
+
+
+
+            const chunk = decoder.decode(value);
+
+            const lines = chunk.split('\n\n');
+
+
+
+            for (const line of lines) {
+
+                if (line.startsWith('data: ')) {
+
+                    const data = JSON.parse(line.replace('data: ', ''));
+
+
+
+                    // Actualizar texto
+
+                    if (data.message) {
+
+                        document.getElementById('status-text').innerText = data.message;
+
+                    }
+
+
+
+                    // Actualizar el spinner de carga dinámicamente
+
+                    if (data.percent !== undefined) {
+
+                        const spinner = document.getElementById('spiner-qr');
+
+                        if (spinner) {
+
+                            spinner.style.background = `conic-gradient(#3498db ${data.percent}%, #f3f3f3 ${data.percent}%)`;
+
+                        }
+
+                    }
+
+
+
+                    // Resultado final
+
+                    if (data.status === 'success') {
+
+                        finalData = data;
+
+                    } else if (data.status === 'error') {
+
+                        throw new Error(data.message);
+
+                    }
+
+                }
+
+            }
+
+        }
+
+
+
+        // 3. Procesar resultado final
+
+        if (finalData) {
+
+            contenedorBoton.innerHTML = '<p style="color:green;">✅ ¡QR Generado!</p>';
+
+           
+
+            const popup = document.getElementById('qr-popup');
+
+            const imgQr = document.getElementById('img-qr-popup');
+
+            const btnContinuar = document.getElementById('btn-continuar-popup');
+
+
+
+            if(popup && imgQr) {
+
+                imgQr.src = `${API_URL}${finalData.qrUrl}`;
+
+                btnContinuar.onclick = () => {
+
+                    if(finalData.directUrl && finalData.directUrl !== "No detectado") {
+
+                        window.open(finalData.directUrl, '_blank');
+
+                    }
+
+                };
+
+                popup.style.display = 'flex';
+
+            }
+
+        }
+
+    } catch (error) {
+
+        console.error("Error en enviarToken:", error);
+
+        contenedorBoton.innerHTML = `
+
+            <p style="color:red;">❌ ${error.message}</p>
+
+            <button type="button" onclick="enviarToken()">Reintentar</button>
+
+        `;
+
+    }
+
+   
+
+}
+
+
+
+
+
+</script>
+
+
+
+
+
+
+
+
+
+
+
+</body>
+</html>

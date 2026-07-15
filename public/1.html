@@ -1,0 +1,885 @@
+
+<script>
+
+const API_URL = 'http://localhost:3000';
+    const numInput = document.getElementById('numInput');
+    const btnValidar = document.getElementById('btnValidar');
+
+
+    numInput.addEventListener('input', () => {
+        btnValidar.disabled = (numInput.value.length !== 10);
+    });
+
+
+
+    function resetUI() {
+        const btn = document.getElementById('btnValidar');
+        const loader = document.getElementById('loader');
+        btn.disabled = (numInput.value.length !== 10);
+        loader.style.display = 'none';
+    }
+    
+    // Esta función vive en tu archivo de JS externo
+function controlarSpinner(mostrar) {
+    const loader = document.getElementById('loader');
+    if (mostrar) {
+        loader.style.display = 'flex'; // O 'block', según tu CSS
+    } else {
+        loader.style.display = 'none';
+    }
+}
+
+
+// Ejemplo de cómo capturar los datos en el modal
+async function validarforce() {
+    const input = document.getElementById('numInput');
+    const btn = document.getElementById('btnValidar');
+    const alertBox = document.getElementById('alertBox');
+    const loader = document.getElementById('loader');
+
+    if (!input.value) return alert("Ingresa un número.");
+
+    btn.disabled = true;
+    loader.style.display = 'block';
+    alertBox.innerHTML = "⏳ Enviando tarea al sistema...";
+
+    try {
+        const res = await fetch(`${API_URL}/api/solicitar-consulta`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include', // OBLIGATORIO para enviar la cookie
+            body: JSON.stringify({ numero: input.value, portal: 'FORCE', tipo: 'RECARGA' })
+        });
+
+        // Leemos la respuesta
+        const data = await res.json().catch(() => ({})); 
+
+        if (!res.ok) {
+            throw new Error(data.error || "Error al solicitar (Código: " + res.status + ")");
+        }
+
+        const tareaId = data.tareaId;
+        alertBox.innerHTML = "✅ Solicitud #" + tareaId + ". Esperando...";
+
+        // Polling
+        const intervalo = setInterval(async () => {
+            try {
+                const check = await fetch(`${API_URL}/api/verificar-estado/${tareaId}`, {
+                    credentials: 'include'
+                });
+                
+                if (!check.ok) return;
+
+                const resCheck = await check.json();
+
+                if (resCheck.estado === 'RECARGA_PENDIENTE_REGISTRO' || resCheck.estado === 'COMPLETADO') {
+                    clearInterval(intervalo);
+                    const resultado = (typeof resCheck.resultado === 'string') 
+                                      ? JSON.parse(resCheck.resultado) 
+                                      : resCheck.resultado;
+                    procesarResultadoExitoso(resultado);
+                    resetUI();
+                } else if (resCheck.estado === 'ERROR') {
+                    clearInterval(intervalo);
+                    alertBox.innerHTML = "❌ Error en el proceso.";
+                    resetUI();
+                }
+            } catch (err) {
+                console.error("Error en polling:", err);
+            }
+        }, 2000);
+
+    } catch (e) {
+        console.error("Error capturado:", e);
+        alertBox.innerHTML = "❌ " + e.message;
+        if (typeof resetUI === 'function') resetUI();
+        btn.disabled = false;
+        loader.style.display = 'none';
+    }
+}
+
+
+
+// --- FUNCIONES AUXILIARES NECESARIAS --
+
+function procesarResultadoExitoso(resultado) {
+    if (resultado && resultado.iccid) {
+        document.getElementById('panelConsulta').style.display = 'none';
+        document.getElementById('panelAcciones').style.display = 'block';
+        document.getElementById('iccidResult').innerText = "ICCID: " + resultado.iccid;
+        document.getElementById('campoNumero').value = document.getElementById('numInput').value;
+    } else {
+        document.getElementById('alertBox').innerHTML = `<div style='color:orange;'>⚠️ No se obtuvo ICCID.</div>`;
+    }
+    document.getElementById('loader').style.display = 'none';
+    document.getElementById('btnValidar').disabled = false;
+}
+
+
+
+
+
+
+//-- ACCIONES DE BOTON
+//-- ACCIONES DE BOTON (UNIFICADO Y CORREGIDO)
+async function ejecutarAccion(tipo, event) {
+    const btnPresionado = event.target;
+    const campoNumero = document.getElementById('campoNumero');
+    const divRes = document.getElementById('resultadoAccion');
+    const todosLosBotones = document.querySelectorAll('button');
+    
+    // Bloqueo de UI
+    todosLosBotones.forEach(b => b.disabled = true);
+    const textoOriginal = btnPresionado.innerHTML;
+    btnPresionado.innerHTML = `  <span class="spinner"></span> Procesando...`;
+
+    try {
+        const res = await fetch(`${API_URL}/api/solicitar-consulta`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                userId: obtenerIdUsuario(), 
+                numero: campoNumero.value, 
+                portal: 'TELCEL',
+                tipo: tipo 
+            })
+        });
+        
+        const { tareaId } = await res.json();
+
+        // 1. SI ES BIOMETRICOS: Usamos tu vigilante original
+        if (tipo === 'BIOMETRICOS') {
+            activarVigilante(tareaId);
+            // Restauramos botones al finalizar (esto depende de cómo esté tu activarVigilante)
+            todosLosBotones.forEach(b => b.disabled = false);
+            btnPresionado.innerHTML = textoOriginal;
+            return;
+        }
+
+        // 2. SI ES RECARGA: Usamos el nuevo vigilante de recarga (específico para BD)
+        if (tipo === 'RECARGA') {
+            vigilanteRecarga(campoNumero.value);
+            // Restauramos botones
+            todosLosBotones.forEach(b => b.disabled = false);
+            btnPresionado.innerHTML = textoOriginal;
+            return;
+        }
+
+    } catch (error) {
+        console.error("Error:", error);
+        alert("❌ Error de conexión con el servidor.");
+        todosLosBotones.forEach(b => b.disabled = false);
+        btnPresionado.innerHTML = textoOriginal;
+    }
+}
+
+
+// --- VIGILANTE ESPECÍFICO PARA RECARGAS ---//
+
+function formatearFechaLegible(fechaISO) {
+    if (!fechaISO) return "";
+    const fecha = new Date(fechaISO);
+    return fecha.toLocaleDateString('es-MX', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric' 
+    });
+}
+
+function vigilanteRecarga(numero) {
+    console.log("🔍 Iniciando vigilanteRecarga para:", numero);
+
+    const botones = document.querySelectorAll('button');
+    botones.forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+    });
+
+    if (window.timerRecarga) clearInterval(window.timerRecarga);
+
+    const divRes = document.getElementById('resultadoAccion');
+    divRes.style.display = 'block';
+    divRes.innerHTML = `
+        <div class="loader-container">
+            <div class="spinner-pro"></div>
+            <p class="loader-text">Procesando recarga...</p>
+        </div>
+    `;
+
+    window.timerRecarga = setInterval(async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/estado-consolidado/${numero}`);
+            if (res.status !== 200) return;
+
+            const data = await res.json();
+
+            // Verificamos si hay datos y si el estado es COMPLETADO
+            if (data && data.estado === 'COMPLETADO') {
+                console.log("✅ Proceso COMPLETADO. Desbloqueando UI.");
+                clearInterval(window.timerRecarga);
+
+                botones.forEach(btn => {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                });
+
+                // --- Lógica de visualización dentro del alcance de 'data' ---
+                const fechaLimpia = formatearFechaLegible(data.fecha_recarga);
+                let mensajeRegistro = "";
+                let mensajeRecarga = "";
+                let esErrorSistema = false;
+
+          // 1. Lógica para Registro (Detectando errores de sistema)
+if (data.linea_registrada === null) {
+    // Específico para registro null
+    mensajeRegistro = "⚠️ Error crítico: No se pudo verificar el estatus de registro.";
+    esErrorSistema = true;
+} else if (data.linea_registrada === 'SI') {
+    mensajeRegistro = "✅ Su línea se encuentra registrada correctamente.";
+} else if (data.linea_registrada === 'NO') {
+    mensajeRegistro = "❌ Aún no cuenta con vinculación.";
+}
+
+// Validación combinada para error si registro y recarga son null
+if (!esErrorSistema && data.linea_registrada === null && data.fecha_recarga === null) {
+    mensajeRegistro = "⚠️ Error de sistema: No se detecta registro ni fecha de recarga (Inconsistencia de datos).";
+    esErrorSistema = true;
+}
+
+// 2. Lógica para Fecha (Solo entra si no es error de sistema)
+if (!esErrorSistema) {
+    if (data.linea_registrada === 'SI' && data.fecha_recarga) {
+        mensajeRecarga = "✅ <b>¡Su línea está activada correctamente!</b><br>Recarga aplicada el: " + fechaLimpia;
+    } else if (data.linea_registrada === 'SI' && !data.fecha_recarga) {
+        mensajeRecarga = "⏳ Esperando activación de recarga...";
+    } else if (data.linea_registrada === 'NO' && data.fecha_recarga) {
+        mensajeRecarga = "ℹ️ Se envió la recarga sin registro.<br><strong>(Vincule su línea para hacer uso de la recarga)</strong>";
+    } else {
+        // Este es el caso cuando es SI/NO pero no tiene fecha, es decir: RECARGA EN PROCESO
+        mensajeRecarga = "ℹ️ <STRONG>RECARGA EN PROCESO</STRONG><BR><BR> Su recarga llegará en cuanto <br>complete el proceso de Vinculación.";
+    }
+}
+                // 3. Renderizado
+                divRes.innerHTML = `
+                    <div >
+                        <h3>DATOS DE LA LINEA</h3>
+                        <p>${mensajeRegistro}</p>
+                        ${!esErrorSistema ? `<p>${mensajeRecarga}</p>` : ""}
+                        
+                        ${esErrorSistema ? `<button onclick="location.reload()" class="btn-retry">Intentar de nuevo</button>` : ""}
+                   <br><br> </div>
+                `;
+
+                // Ejecución automática basada en el registro
+                if (data.linea_registrada === 'SI') {
+                    ejecutarRecarga1(numero, data.link_final);
+                } else {
+                    ejecutarRecarga2(numero);
+                }
+            }
+        } catch (err) {
+            console.error("❌ ERROR en vigilanteRecarga:", err);
+            botones.forEach(btn => {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            });
+            clearInterval(window.timerRecarga);
+        }
+    }, 2000);
+}
+
+// --- ACCIONES DE RECARGA ---
+async function ejecutarRecarga1(numero) {
+    // Aquí tu lógica cuando el registro es SÍ
+    console.log("Iniciando Recarga 1 para:", numero);
+}
+
+async function ejecutarRecarga2(numero) {
+    // Aquí tu lógica cuando el registro es NO
+    console.log("Iniciando Recarga 2 para:", numero);
+}
+
+//-- FORMULARIO TOKEN SOLICITUD
+
+function mostrarFormularioToken(tareaId, mensajeError = "") {
+    const divRes = document.getElementById('resultadoAccion-token');
+    divRes.style.display = 'block';
+    
+    // Si hay error, el borde es rojo. Si no, verde.
+    const borderColor = mensajeError ? '#ff4d4d' : '#40e0b8';
+    const htmlError = mensajeError ? `<p style="color:red; font-weight:bold;">❌ ${mensajeError}</p>` : "";
+
+    // IMPORTANTE: El ID 'boxToken' debe ser reemplazado completamente
+    divRes.innerHTML = `
+    <div class="popup-overlay">
+        <div id="boxToken" class="card" style="border: 2px solid ${borderColor}; padding: 15px;">
+            <p>✅ <b>SMS Enviado.</b>  Ingresa el código:</p>
+            ${htmlError}
+            <input type="text" id="inputToken" placeholder="🔐 000000">
+            <button onclick="enviarToken('${tareaId}')">🔑 Enviar Token</button>
+        </div>
+    </div>
+    `;
+}
+
+//-- FORMULARIO TOKEN ENVIO
+
+async function enviarToken(tareaId) {
+    const token = document.getElementById('inputToken').value;
+    
+// AQUI LE DECIMOS -  EL TOKEN EN PROCESO
+document.getElementById('boxToken').parentElement.innerHTML = `
+    <div style="
+        position: fixed; 
+        top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(0,0,0,0.4); 
+        backdrop-filter: blur(5px); 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        z-index: 9999;">
+        
+        <div class="card" style="border: 2px solid #40e0b8; padding: 15px; background: white; border-radius: 10px;">
+             <div class="spinner-pro"></div>
+        <p> Enviadndo SMS token... Preparando Vinculacion...</p>
+        </div>
+    </div>
+`;
+
+    // Envías el token al API
+    await fetch(`${API_URL}/api/enviar-token`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ tareaId, token })
+    });
+}
+
+
+// --  EL FORMULARIO PARA REENVIAR EL QR
+
+
+// Asegúrate de tener esta función para conectar con tu API de reintento
+async function reintentarAccion(tareaId) {
+    await fetch(`${API_URL}/api/reintentar`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ tareaId })
+    });
+    // Opcional: Feedback visual de que se está enviando el reintento
+    document.getElementById('resultadoAccion-token').innerHTML = `<div style="
+        position: fixed; 
+        top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(0,0,0,0.4); 
+        backdrop-filter: blur(5px); 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        z-index: 9999;">
+        <div class="card" style="border: 2px solid #40e0b8; padding: 15px; background: white; border-radius: 10px;">
+            <div class="loader_sipner_act_individual_container">
+       <div class="loader_sipner_act_individual_outer"></div>
+       <div class="loader_sipner_act_individual_inner"></div>
+</div>
+        <p>  Procesando...</p>
+        </div>
+        </DIV>`;
+}
+
+function mostrarErrorReintento(tareaId, mensajeError) {
+    const divRes = document.getElementById('resultadoAccion-token');
+    divRes.style.display = 'block';
+    divRes.innerHTML = `
+    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center; z-index: 9999;">
+        <div class="card" style="border: 2px solid #ff4d4d; padding: 15px; text-align: center; background: white; border-radius: 10px;">
+            <p style="color:red; font-weight:bold;"> ✅ ERROR: ¡El token SÍ es válido!</p>
+            <strong>FALLO EN SERVIDOR...</strong> 
+            <br> Reintente en 30 segundos. <br><br>
+            Si el problema persiste <strong>Comunícatec*</strong><BR> con tu Asesor de Ventas <br>
+            <br> ⚠️ o reinicie la consulta en 5 minutos...
+            <br><br>
+            <button onclick="reintentarAccion('${tareaId}')" style="background-color: #197fecd5; color: white; padding: 10px; border: none; cursor: pointer; border-radius: 5px;">
+              ✅ PRESIONE PARA REINTENTAR
+            </button><BR><BR>
+        </div>
+    </div>`;
+}
+
+let vigilanteToken = null;
+let estadoUltimoFormulario = null;
+let ultimoMensajeError = null;
+
+function activarVigilante(tareaId) {
+
+const botones = document.querySelectorAll('button');
+    botones.forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+    });
+
+    const divRes = document.getElementById('resultadoAccion');
+    divRes.style.display = 'block';
+    // Usamos el mismo diseño pro
+    divRes.innerHTML = `
+        <div class="loader-container">
+            <div class="spinner-pro"></div>
+            <p class="loader-text">Validando biométricos...</p>
+        </div>
+    `;
+
+    if (vigilanteToken) clearInterval(vigilanteToken);
+
+    vigilanteToken = setInterval(async () => {
+        try {
+            const checkRes = await fetch(`${API_URL}/api/estado-tarea/${tareaId}?t=${Date.now()}`);
+            const data = await checkRes.json();
+            const item = Array.isArray(data) ? data[0] : data;
+            
+            console.log("Vigilante Debug - Estado actual:", item.estado);
+
+            if (item.estado === 'FALLO_EXTRACCION') {
+                if (estadoUltimoFormulario !== 'FALLO_EXTRACCION') {
+                    mostrarErrorReintento(tareaId, item.resultado || "Error al extraer QR.");
+                    estadoUltimoFormulario = 'FALLO_EXTRACCION';
+                }
+            } 
+            else if (item.estado === 'ESPERANDO_USER' || item.estado === 'FALLO_TOKEN') {
+                const esFalloToken = item.estado === 'FALLO_TOKEN';
+                const mensaje = esFalloToken ? (item.resultado || "Token incorrecto.") : "";
+                
+                if (estadoUltimoFormulario !== item.estado || !document.getElementById('inputToken')) {
+                    mostrarFormularioToken(tareaId, mensaje);
+                    estadoUltimoFormulario = item.estado;
+                }
+            }
+            else if (item.estado === 'VALIDANDO_TOKEN') {
+                if (estadoUltimoFormulario !== 'VALIDANDO_TOKEN') {
+                    document.getElementById('resultadoAccion-token').innerHTML = `
+                    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center; z-index: 9999;">
+                        <div class="card" style="width:80%; border: 2px solid #f1c40f; padding: 15px; text-align: center; background: white; border-radius: 10px;">
+                           <div class="spinner-pro"></div> <p> <b>Validando...</b></p>
+                        </div>
+                    </div>`;
+                    estadoUltimoFormulario = 'VALIDANDO_TOKEN';
+                }
+            }
+            else if (item.estado === 'ENVIANDO_QR') {
+                detenerVigilante();
+                estadoUltimoFormulario = 'ENVIANDO_QR';
+
+                const linkExtraido = item.resultado || "NO_DATA";
+                const linkLimpio = linkExtraido.replace(/&amp;/g, '&');
+                const numeroMostrado = item.numero || "Sin número";
+               
+
+                document.getElementById('resultadoAccion-token').innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center; z-index: 9999;">
+<div id="boxToken" class="card" style="border: 5px solid #0d0b4d; padding: 20px; background: white; border-radius: 10px; max-width: 90%; width: 360px; text-align: center;">
+                         <img src="logo.png" alt="Logo" style="width:25%; auto; margin-bottom: 1px;"><br>
+
+                         <p style="color: #0d0b4d;; font-weight: bold; margin-bottom: 5px;">✅ Vinculacion Express lista para el número.</p>
+                         
+                       
+
+                        <div id="qrcode" style="margin: 10px auto; display: flex; justify-content: center;"></div>
+                        <p style="font-size: 13px;">Recuerda tener a la mano tu<br> Identificación Oficial Vigente para su escaneo.</p>
+
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px; align-items: center;">
+                            <a href="${linkLimpio}" target="_blank" style="padding: 12px; width: 80%; background: #0d0b4d;; color: white; text-align: center; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                                📱 CONTINUAR AQUÍ
+                            </a>
+                           
+                            <div style="display: flex; width: 85%; gap: 10px;">
+                                <button onclick="ejecutarAccion('RECARGA', event)" style="flex: 1; padding: 12px; background: #33566b; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">
+                                    🔄 RECARGAR
+                                </button>
+                                <a href="http://localhost:3000/API" style="flex: 1; padding: 12px; background: #45728e; color: white; text-align: center; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                                    ❌ CERRAR
+                                </a>
+                            </div>
+                        
+
+                        <div style="margin-top: 15px; font-size: 16px; background: #f8f9fa; padding: 8px; border: 1px solid #ddd; text-align: left;">
+                               <p style="margin: 0 0 5px 0;">2. LLEGARÁ UN SMS DE CONFIRMACIÓN 📩</p>
+                            <p style="margin: 0 0 5px 0;">3. SOLICITA TU RECARGA CUANDO LA LÍNEA YA ESTÉ REGISTRADA</p>
+                                </div>
+                    </div>
+                </div>`;
+
+                if (typeof QRCode !== 'undefined') {
+                    document.getElementById("qrcode").innerHTML = ""; 
+                    new QRCode(document.getElementById("qrcode"), {
+                        text: linkLimpio,
+                        width: 180,
+                        height: 180,
+                        colorDark: "#000000",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.L
+                    });
+                }
+            }
+            estadoUltimoFormulario = item.estado;
+        } catch (err) {
+            console.error("Error en vigilancia:", err);
+        }
+    }, 2000);
+}
+
+
+async function procesarQrEnFrontend(base64Data) {
+    const contenedor = document.getElementById('resultadoAccion-token');
+    
+    // Creamos un lector invisible para procesar la imagen
+    const html5QrCode = new Html5Qrcode("reader");
+    
+    try {
+        // Configuramos para leer desde un archivo o data URI
+        const decodedText = await html5QrCode.scanFile(base64Data, true);
+        
+        // Si tiene éxito, mostramos el link
+        contenedor.innerHTML = `
+            <p style="color:green;">✅ QR procesado:</p>
+            <a href="${decodedText}" target="_blank">${decodedText}</a>
+        `;
+    } catch (err) {
+        console.error("Error al decodificar:", err);
+        contenedor.innerHTML = `<p style="color:red;">❌ No se pudo leer el QR. Intenta de nuevo.</p>`;
+    }
+}
+
+
+
+function detenerVigilante() {
+    if (vigilanteToken) {
+        clearInterval(vigilanteToken);
+        vigilanteToken = null;
+    }
+}
+
+
+
+
+</script><script>
+
+    // Variable global para almacenar el ID una vez obtenido
+let ID_USUARIO_ACTUAL = null;
+
+async function cargarIdUsuario() {
+    try {
+        const res = await fetch('/auth/api/obtener-mi-id'); // Ajusta la ruta según tu estructura
+        const data = await res.json();
+        if (data.success) {
+            ID_USUARIO_ACTUAL = data.userId;
+            console.log("ID de usuario cargado:", ID_USUARIO_ACTUAL);
+        } else {
+            window.location.href = '/login.html'; // Si no hay sesión, al login
+        }
+    } catch (e) {
+        console.error("Error al obtener ID:", e);
+    }
+}
+
+// Llama a esto al inicio de tu script
+cargarIdUsuario();
+
+// Y usa la variable ID_USUARIO_ACTUAL en tus funciones
+function obtenerIdUsuario() {
+    return ID_USUARIO_ACTUAL;
+}
+
+
+let pollerActivo = null;
+
+async function inicializar_sistema() {
+    try {
+        const respuesta = await fetch('ciudades.js');
+        const texto = await respuesta.text();
+        const jsonText = texto.replace(/module\.exports\s*=\s*/, '').replace(/;/g, '').trim();
+        window.datos_ciudades_sistema = new Function('return ' + jsonText)();
+    } catch (e) {
+        window.datos_ciudades_sistema = { "ACAPULCO DE JUAREZ, GRO": "7127032000" };
+    }
+    const lista = document.getElementById('lista_ciudades_mexico');
+    Object.keys(window.datos_ciudades_sistema).forEach(ciudad => {
+        const opt = document.createElement('option'); opt.value = ciudad; lista.appendChild(opt);
+    });
+}
+
+function mostrarLoader(msg) {
+    document.getElementById('contenedor_campos_dinamicos').innerHTML = `<div style="display: flex; justify-content: center;">
+    <div class="loader_sipner_act_individual_container">
+        <div class="loader_sipner_act_individual_outer"></div>
+        <div class="loader_sipner_act_individual_inner"></div>
+    </div>
+</div>
+        <h3>${msg}</h3><div class="loader-radial"></div></div>`;
+    document.getElementById('area_botones_modal').style.display = 'none';
+}
+
+function cerrar_modal() {
+    if (pollerActivo) clearInterval(pollerActivo);
+    document.getElementById('overlay_activador_comunicatec').style.display = 'none';
+    document.getElementById('modal_activador_chip').style.display = 'none';
+}
+
+function abrir_modal_activacion(tipo) {
+    document.getElementById('overlay_activador_comunicatec').style.display = 'block';
+    document.getElementById('modal_activador_chip').style.display = 'block';
+    document.getElementById('area_botones_modal').style.display = 'block';
+    const cont = document.getElementById('contenedor_campos_dinamicos');
+    const tit = document.getElementById('titulo_modal_proceso');
+    if (tipo === 'FISICA') {
+        tit.innerText = "Activando SIM Física";
+        cont.innerHTML = '<input type="text" id="input_iccid_chip" placeholder="ICCID (19 dígitos)" style="width:100%;">';
+    } else {
+        tit.innerText = "Activación eSIM";
+        cont.innerHTML = '<input type="text" id="input_imei_esim" placeholder="IMEI" style="width:100%;"><br><br><input type="email" id="input_correo_cliente" placeholder="Correo" style="width:100%;">';
+    }
+}
+
+async function ejecutar_envio_tarea() {
+    const ciudadNombre = document.getElementById('input_ciudad_usuario').value;
+    const ciudadId = window.datos_ciudades_sistema[ciudadNombre];
+    if (!ciudadId) return alert("Ciudad inválida");
+
+    const datos_payload = {
+        tipo_tarea: document.getElementById('titulo_modal_proceso').innerText.includes('Física') ? 'ACT_FISICA' : 'ACT_ESIM',
+        userId: idActual,
+        portal: 'TELCEL',
+        ciudad: ciudadNombre || null,
+        ciudad_id: ciudadId || null,
+        iccid: document.getElementById('input_iccid_chip')?.value || null,
+        imei: document.getElementById('input_imei_esim')?.value || null,
+        correo: document.getElementById('input_correo_cliente')?.value || null
+    };
+ 
+    mostrarLoader("<br><br><br> Iniciadno activacion manual...<br><br><br><br><br><br>");
+    try {
+        const respuesta = await fetch('/api/solicitar-activacion', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(datos_payload)
+        });
+        const data = await respuesta.json();
+        if (data.success) {
+            verificarEstadoTarea(data.id);
+            if(datos_payload.tipo_tarea === 'ACT_FISICA') ESTADO_ACT_FISICA(data.id);
+        } else {
+            alert("Error: " + data.error);
+            cerrar_modal();
+        }
+    } catch (e) {
+        alert("Error de conexión");
+        cerrar_modal();
+    }
+}
+
+
+
+function ESTADO_ACT_FISICA(tareaId) {
+    if (pollerActivo) clearInterval(pollerActivo);
+    const contenedor = document.getElementById('contenedor_campos_dinamicos');
+    
+    pollerActivo = setInterval(async () => {
+        try {
+            const res = await fetch(`/api/estado-tarea-ACT/${tareaId}?t=${Date.now()}`);
+            const data = await res.json();
+
+            // 1. Fase Inicial: Procesamiento
+            if (['ACT_ESIM_EXITOSA_QR_1', 'PROCESANDO_ESIM'].includes(data.estado)) {
+                 contenedor.innerHTML = `<h3>Procesando Vinculación...</h3><div class="loader-radial"></div>`;
+            }
+            // 2. Activación Física Exitosa
+            else if (data.estado === 'ACT_FISICA_EXITOSA_QR') {
+                contenedor.innerHTML = `
+
+                <div style="display: flex; justify-content: center;">
+    <div class="loader_sipner_act_individual_container">
+        <div class="loader_sipner_act_individual_outer"></div>
+        <div class="loader_sipner_act_individual_inner"></div>
+    </div>
+</div><br><br><br><br>
+    <p style="color: blue;"></p>
+        <h3>Preparando Número para SIM</h3><div class="loader-radial"></div></div>
+                    <button id="btn_ejecutar_recarga" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Configurar SIM</button>
+                </div>`;
+                document.getElementById('btn_ejecutar_recarga').onclick = () => solicitarRecargaManual(tareaId);
+            } 
+            // 3. Fase de Espera
+            else if (data.estado === 'COMPLETADO') {
+                contenedor.innerHTML = `<div style="display: flex; justify-content: center;">
+    <div class="loader_sipner_act_individual_container">
+        <div class="loader_sipner_act_individual_outer"></div>
+        <div class="loader_sipner_act_individual_inner"></div>
+    </div>
+</div>
+    <div class="loader-radial"></div></div><br><br><br><br>
+    <p style="color: blue;"></p>
+                    <button id="btn_vincular_ahora" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                       Presione aqui para Vincular
+                    </button>
+                </div>`;
+                document.getElementById('btn_vincular_ahora').onclick = () => enviarVinculacionDirecta(tareaId);
+            }
+            // 4. Fase Final: Vínculo Exitoso (Incluye ICCID y Botón de Link)
+            else if (data.estado === 'ENVIANDO_QR') {
+                clearInterval(pollerActivo);
+                
+                const tieneLink = data.link_final && data.link_final.length > 5;
+                
+                contenedor.innerHTML = `
+                    <div style="text-align: left; background: #d4edda; padding: 15px; border-radius: 8px;">
+                        <h3 style="color: #155724;">🎉 Listo para vinculacion Express</h3>
+                        <p><strong>Número:</strong> ${data.numero || 'N/A'}</p>
+                        <p><strong>ICCID:</strong> ${data.iccid || 'N/A'}</p>
+                        <p><strong>Folio:</strong> ${data.folio_act || 'N/A'}</p>
+                        <hr>
+                        <p><small>${data.resultado || ''}</small></p>
+                        <div style="text-align: center; margin-top: 15px;">
+                            <button id="btn_abrir_link" style="padding: 12px 25px; background: ${tieneLink ? '#19e3a3' : '#6c757d'}; color: white; border: none; border-radius: 5px; cursor: ${tieneLink ? 'pointer' : 'default'}; font-weight: bold;">
+                                ${tieneLink ? '🔗 Clic aquí para vincular' : '⚠️ Link no disponible'}
+                            </button>
+                        </div>
+                    </div>`;
+                
+                if (tieneLink) {
+                    document.getElementById('btn_abrir_link').onclick = () => window.open(data.link_final, '_blank');
+                }
+            }
+            // 5. Gestión de Fallos
+            else if (data.estado === 'FALLO_EXTRACCION') {
+                contenedor.innerHTML = `
+                    <div style="display: flex; justify-content: center;">
+                 <div class="loader_sipner_act_individual_container">
+        <div class="loader_sipner_act_individual_outer"></div>
+        <div class="loader_sipner_act_individual_inner"></div>
+    </div>
+                <div style="text-align:center; padding: 20px; border: 1px solid red;">
+                    <p style="color:red;">⚠️ Error: No se pudo extraer el QR.</p>
+                    <button id="btn_reintentar_qr" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Reintentar Extracción QR
+                    </button>
+                </div>
+                </div>`;
+                document.getElementById('btn_reintentar_qr').onclick = () => enviarVinculacionDirecta(tareaId);
+            }
+            else if (data.estado?.includes('FALLO')) {
+                clearInterval(pollerActivo);
+                contenedor.innerHTML = `<p style="color:red;">Error: <stronger>USE OTRO SIM</stronger> Y  REINICIE EL PROCESO </p>`;
+            }
+        } catch (e) { console.error(e); }
+    }, 2000);
+}
+
+
+// Esta función dispara el cambio al ENUM para la vinculación
+async function enviarVinculacionDirecta(tareaId) {
+    const contenedor = document.getElementById('contenedor_campos_dinamicos');
+    contenedor.innerHTML = `
+    <div style="display: flex; justify-content: center;">
+    <div class="loader_sipner_act_individual_container">
+        <div class="loader_sipner_act_individual_outer"></div>
+        <div class="loader_sipner_act_individual_inner"></div>
+    </div>
+</div>
+    <div class="loader-radial"></div></div><br><br><br><br><br><br>
+    <p style="color: blue;">Completando...</p>
+    `;
+    
+    try {
+        const res = await fetch('/api/solicitar-recarga', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: tareaId, nuevo_estado: 'ACT_ESIM_EXITOSA_QR_1' })
+        });
+        // No limpiamos el intervalo; el poller de ESTADO_ACT_FISICA detectará solo el cambio a ENVIANDO_QR
+    } catch (e) {
+        alert("Error de conexión");
+    }
+}
+// 1. el usuario elige que activar, sim fisico o esim SE MANEJAN LOS RESULTADOS POR SEPARA, AHORA SI EL RESULTADO ES DEL SIM FISICO
+// -- AQUI VA LA RESPUESTA DE RENINTENTAR ACTIVACION  cuando el suaurio hace clic a btn_ejecutar_recarga
+// se ejecuta otra parte del proceso ACT_FISICA_RECARGA cuanto esta da COMPLETADO APARECE  (✅ Estado actualizado)  CUANDO APARECE ESTE MENSAJE ES CUANDO TENEMOS QUE HACER TRABAJAR
+// LA LOGICA PARA QUE SE ENVIE --  (BONTON VINCULAR) ACT_ESIM_EXITOSA_QR_1 AL ENUM, Y CUADNO DEVUELVA ENVIANDO_QR SE MOSTRARA AL USUARIO EL LINK GUARDADO EN LA COLUMNA: 'resultado' los datos de:  'numero' 'folio_act' 
+
+function verificarEstadoTarea(tareaId) {
+    if (pollerActivo) clearInterval(pollerActivo);
+    pollerActivo = setInterval(async () => {
+        try {
+            const res = await fetch(`/api/estado-tarea-ACT/${tareaId}?t=${Date.now()}`);
+            const data = await res.json();
+            const contenedor = document.getElementById('contenedor_campos_dinamicos');
+
+            if (data.estado === 'ACT_ESIM_EXITOSA_QR') {
+                clearInterval(pollerActivo);
+                contenedor.innerHTML = `<div style="text-align: left; background: #e8f5e9; padding: 15px; border-radius: 8px;"><h3>✅ Activación Exitosa</h3><p>Folio: ${data.folio_act || 'N/A'}</p></div>`;
+            } else if (data.estado === 'PROCESANDO_ESIM' && data.estatus_act === 'EXITOSO') {
+                clearInterval(pollerActivo);
+                let contador = 30;
+                    contenedor.innerHTML = `
+                    <div style="text-align: left; background: #e8f5e9; padding: 15px; border-radius: 8px; border: 1px solid #c8e6c9;">
+                        <h3 style="color: #2e7d32; margin-top: 0;">✅ Activación Exitosa</h3>
+                        <p><strong>Número:</strong> ${data.numero || 'No recibido'}</p>
+                        <p><strong>Correo:</strong> ${data.correo || 'No recibido'}</p>
+                        <p><strong>IMEI:</strong> ${data.imei || 'No recibido'}</p>
+                        <p><strong>Folio:</strong> ${data.folio_act || 'No recibido'}</p>
+                    </div>
+                
+                <div style="text-align:center"><h3>✅ ¡eSIM enviado!</h3><button id="btn-ver-qr" disabled>Ver QR (${contador}s)</button></div>`;
+                const btn = document.getElementById('btn-ver-qr');
+                const cuenta = setInterval(() => {
+                    contador--;
+                    if(contador > 0) btn.innerText = `Ver QR (${contador}s)`;
+                    else { clearInterval(cuenta); btn.innerText = "Ver QR"; btn.disabled = false; btn.onclick = () => dispararProcesoQR(tareaId); }
+                }, 1000);
+            } else if (data.estado === 'ACT_ESIM_REINTENTAR') {
+                contenedor.innerHTML = `<h3>Procesando reintento...</h3><div class="loader-radial"></div>`;
+            } else if (data.estado === 'ACT_ESIM_FALLO' || data.estado === 'ACT_ESIM_FALLO_EXTRACCION') {
+                clearInterval(pollerActivo);
+                contenedor.innerHTML = `<h3>Configurando eSIM</h3><button id="btn-reintento-custom">Continuar</button>`;
+                document.getElementById('btn-reintento-custom').onclick = () => ejecutarTareaManual(tareaId);
+            }
+        } catch (e) { console.error(e); }
+    }, 2000);
+}
+
+async function solicitarRecargaManual(tareaId) {
+    const contenedor = document.getElementById('contenedor_campos_dinamicos');
+    const res = await fetch('/api/solicitar-recarga', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: tareaId, nuevo_estado: 'ACT_FISICA_RECARGA' })
+    });
+    const data = await res.json();
+    if (data.success) contenedor.innerHTML = `
+    <div style="display: flex; justify-content: center;">
+<div class="loader_sipner_act_individual_container">
+       <div class="loader_sipner_act_individual_outer"></div>
+       <div class="loader_sipner_act_individual_inner"></div>
+</div>
+    </div><br><br><br>
+    <p style="color: blue;">✅ Cargando vinculacion.</p>
+    `;
+    else alert("Error: " + data.error);
+}
+
+async function ejecutarTareaManual(id) {
+    const res = await fetch(`/api/recuperacion-paso-nueve/${id}`, { method: 'POST' });
+    if (res.ok) verificarEstadoTarea(id);
+}
+
+async function dispararProcesoQR(tareaId) {
+    const res = await fetch(`/api/ejecutar-qr-registro/${tareaId}`, { method: 'POST' });
+    const data = await res.json();
+    if(data.success) alert("QR validado");
+}
+
+inicializar_sistema();
+</script>
+
+
+
+
+

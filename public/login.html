@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Acceso al Sistema</title>
+</head>
+<body>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f4f7f6; margin: 0; }
+        .login-card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; text-align: center; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        .btn-ingresar { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-logout { width: 100%; padding: 10px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+        #mensaje { margin-top: 15px; font-size: 14px; padding: 10px; border-radius: 5px; display: none; }
+    </style>
+
+    <div class="login-card">
+        <h3>Iniciar Sesión</h3>
+        <input type="text" id="correo" placeholder="Correo electrónico" required>
+        <input type="password" id="password" placeholder="Contraseña" required>
+        <button class="btn-ingresar" onclick="login()">Ingresar</button>
+        <button class="btn-logout" onclick="logout()">Cerrar Sesión</button>
+        <div id="mensaje"></div>
+    </div>
+
+<script>
+ const API_URL = 'http://localhost:3000';
+
+// FUNCIÓN LOGIN: La única que debe existir
+async function login() {
+    const correo = document.getElementById('correo').value;
+    const password = document.getElementById('password').value;
+    const msg = document.getElementById('mensaje');
+
+    try {
+        const res = await fetch(`${API_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ correo, password }) // Ya no necesita credentials: 'include'
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            // Guardamos el token en el navegador. Esto es persistente y no falla.
+            localStorage.setItem('token', data.token); 
+            console.log("✅ Autenticación exitosa. Token guardado.");
+            window.location.href = '/autorecarga.html';
+        } else {
+            msg.innerText = data.message || "Error al iniciar sesión.";
+            msg.style.display = 'block';
+        }
+    } catch (error) {
+        console.error("❌ Error de red:", error);
+        msg.innerText = "Error crítico de conexión.";
+        msg.style.display = 'block';
+    }
+}
+
+// FUNCIÓN LOGOUT: Ahora borra el token
+async function logout() {
+    localStorage.removeItem('token');
+    window.location.href = '/login.html';
+}
+
+// PARA CADA PÁGINA (monitoreo1.html, etc):
+// Pon esto al principio para proteger la ruta
+const token = localStorage.getItem('token');
+if (token) {
+    // Si ya tienes token, no necesitas hacer login otra vez, ve al monitor
+    window.location.href = '/login.html';
+}
+</script>
+</body>
+</html>

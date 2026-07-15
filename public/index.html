@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro - Distribuidor COMUNICATEC</title>
+
+</head>
+<body>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   
+      <style>
+        :root { --primary-blue: #004A99; --bg-white: #ffffff; --light-gray: #f4f7f9; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background-color: var(--light-gray); margin: 0; padding: 15px; color: #333; }
+                .main-content { background: var(--bg-white); padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
+        h3 { color: var(--primary-blue); border-bottom: 2px solid var(--primary-blue); padding-bottom: 10px; margin-top: 0; }
+                input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+                button { width: 100%; padding: 14px; background-color: var(--primary-blue); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.3s; }
+        button:active { transform: scale(0.98); }
+                /* Loader Radial */
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary-blue); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 10px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .status-box { padding: 15px; border-radius: 8px; margin-top: 15px; background: #eef6ff; border-left: 5px solid var(--primary-blue); }
+        #monitor-visual { margin-top: 20px; background: white; padding: 10px; border-radius: 8px; text-align: center; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+
+    <div class="main-content">
+        <div id="registro-panel" class="module-panel active">
+            <h3>Módulo: Registro de Clientes BES</h3>
+
+
+            
+            <input type="text" id="num-telcel" placeholder="Ej. 7441234567" maxlength="10">
+            <button id="btn-enviar" onclick="enviarRegistroLinea()">Enviar Número</button>
+            
+            <div id="seccion-token" style="display: none; margin-top: 25px;">
+                <input type="text" id="token-sms" placeholder="Código SMS" maxlength="8">
+                <button onclick="enviarTokenSms()">Confirmar Token y Generar QR</button>
+                <div id="contenedorBotonContinuar" style="margin-top: 20px; display: none;"></div>
+            </div>
+
+            <div id="status-registro" class="status-box" style="display:none;">
+                <span id="status-message"></span>
+            </div>
+        </div>
+    </div>
+
+
+
+<script>
+    const API_URL = 'http://192.168.1.71:3000';
+    let MI_USER_ID = localStorage.getItem('vendedor_id') || ('vend_' + Math.random().toString(36).substr(2, 9));
+    localStorage.setItem('vendedor_id', MI_USER_ID);
+
+    async function enviarRegistroLinea() {
+        enviarRegistroLinea.innerHTML = `
+            <div style="display:flex; flex-direction:column; align-items:center;">
+                <div class="loader" style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 2s linear infinite;"></div>
+                <p id="proceso-texto" style="margin-top:10px; font-weight:bold;">Validando Token...</p>
+            </div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        `;
+        const numeroInput = document.getElementById('num-telcel').value;
+        const response = await fetch(`${API_URL}/api/registro-linea`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ numero: numeroInput, userId: MI_USER_ID })
+        });
+        const data = await response.json();
+        if(data.status === 'success') {
+            document.getElementById('status-registro').style.display = "block";
+            document.getElementById('status-message').innerText = "🎉 " + data.message;
+            document.getElementById('seccion-token').style.display = "block";
+        }
+    }
+async function enviarTokenSms() {
+    const tokenInput = document.getElementById('token-sms'); // Referencia al input
+    const contenedorBoton = document.getElementById('contenedorBotonContinuar');
+    
+    // 1. Mostrar loader
+    contenedorBoton.innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center;">
+            <div class="loader"></div>
+            <p style="margin-top:10px; font-weight:bold;">Validando Token...</p>
+        </div>
+    `;
+    contenedorBoton.style.display = "block";
+
+    try {
+        const response = await fetch(`${API_URL}/api/confirmar-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: tokenInput.value, userId: MI_USER_ID })
+        });
+        
+        const data = await response.json();
+
+        if (data && data.status === 'success') {
+            // ÉXITO
+            contenedorBoton.innerHTML = '<p style="color:green; font-weight:bold;">✅ ¡QR Generado con éxito!</p>';
+            
+            const btnVerQr = document.createElement('button');
+            btnVerQr.innerText = '👁️ VER QR';
+            btnVerQr.className = 'action-btn';
+            btnVerQr.style.backgroundColor = '#d97706';
+            
+            btnVerQr.onclick = () => {
+                const popup = document.getElementById('qr-popup');
+                document.getElementById('img-qr-popup').src = `${API_URL}${data.qrUrl}`;
+                
+                document.getElementById('btn-continuar-popup').onclick = () => {
+                    if(data.directUrl && data.directUrl !== "No detectado") {
+                        window.open(data.directUrl, '_blank');
+                    } else {
+                        alert("La URL de continuación no está disponible.");
+                    }
+                };
+                popup.style.display = 'flex';
+            };
+            
+            contenedorBoton.appendChild(btnVerQr);
+        } else {
+            // ERROR: Aquí permitimos el reintento que pediste
+            contenedorBoton.innerHTML = `<span style="color:red; font-weight:bold;">❌ ${data.message}</span>`;
+            
+            // Esperar 2 segundos para que el usuario lea el error y luego limpiar el input
+            setTimeout(() => {
+                tokenInput.value = ''; // Limpiar campo
+                tokenInput.focus();    // Enfocar nuevamente
+            }, 2000);
+        }
+    } catch (err) {
+        contenedorBoton.innerHTML = `<span style="color:red;">Error de conexión.</span>`;
+    }
+}
+
+// 2. ESTO VA FUERA DE LA FUNCIÓN: Se declara una sola vez al cargar la página
+document.getElementById('qr-popup').onclick = (e) => {
+    if (e.target.id === 'qr-popup') {
+        document.getElementById('qr-popup').style.display = 'none';
+    }
+};
+</script>
+
+
+<div id="qr-popup" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; justify-content:center; align-items:center;">
+    <div style="background:white; padding:30px; border-radius:15px; text-align:center; max-width:400px; width:90%;">
+        <h3>¡QR Generado!</h3>
+        <img id="img-qr-popup" src="" style="width:100%; border:2px solid #eee;" />
+        <div style="margin-top:20px;">
+            <button id="btn-continuar-popup" style="background:#005cbb; color:white; border:none; padding:15px 30px; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">
+                CONTINUAR REGISTRO
+            </button>
+        </div>
+    </div>
+</div>
+</body>
+</html>

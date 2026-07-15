@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Activaciones</title>
+    <style id="estilo-blindaje"> body { display: none !important; } </style>
+    
+    <style>
+        body { margin: 0; padding: 20px 10px; font-family: sans-serif; background: #f4f4f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .contenedor-monitor { width: 100%; max-width: 500px; }
+        .titulo-monitor { background: #003366; color: white; padding: 15px; text-align: center; border-radius: 8px; font-weight: bold; margin-bottom: 20px; font-size: 18px; }
+        .tabla-container { overflow-x: auto; background: white; border-radius: 8px; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); width: 100%; box-sizing: border-box; }
+        table { width: 100%; border-collapse: collapse; color: #333; }
+        th { background: #003366; color: white; padding: 10px; font-size: 12px; }
+        td { padding: 8px; border-bottom: 1px solid #ddd; font-size: 12px; }
+        .btn-verde { background: #28a745; color: white; border: none; padding: 6px 8px; border-radius: 4px; cursor: pointer; }
+        .btn-amarillo { background: #ffc107; color: #000; border: none; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-azul { background: #007bff; color: white; border: none; padding: 6px 8px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="contenedor-monitor">
+    <div class="titulo-monitor">CONTROL DE ACTIVACIONES</div>
+    <div class="tabla-container">
+        <table>
+            <thead><tr><th>Número</th><th>Acción</th></tr></thead>
+            <tbody id="contenido-tabla"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // 1. Ejecutar al cargar la página
+    document.addEventListener("DOMContentLoaded", async () => {
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+            window.location.href = '/login.html';
+            return;
+        }
+
+        try {
+            // Verificamos sesión y poblamos en un solo flujo
+            const res = await fetch('http://localhost:3000/api/ultimas-lineas', {
+                method: 'GET',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+
+            if (res.status === 401 || res.status === 403) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            const datos = await res.json();
+            
+            // 2. Si todo está bien, quitamos el estilo de "blindaje" y llenamos la tabla
+            document.getElementById('estilo-blindaje').remove();
+            
+            const tbody = document.getElementById('contenido-tabla');
+            if (tbody && Array.isArray(datos)) {
+                tbody.innerHTML = datos.map(r => {
+                    let accion = "";
+                    // ... (tu misma lógica de botones de antes) ...
+                    if (r.estado === 'ENVIANDO_QR') {
+                        accion = `<a href="${r.resultado || '#'}" target="_blank"><button class="btn-verde">LISTO PARA VINCULAR</button></a>`;
+                    } else if (r.estado === 'COMPLETADO') {
+                        accion = (r.linea_registrada === 'SI') ? `<button class="btn-azul">EXITOSO</button>` : `<button class="btn-amarillo" onclick="reenviarToken(${r.id})">REINTENTAR</button>`;
+                    } else if (['ESPERANDO_USER', 'ESPERANDO_BOT', 'VALIDANDO_TOKEN', 'FALLO_TOKEN', 'COMPLETADO_TOKEN', 'GENERANDO_QR'].includes(r.estado)) {
+                        accion = `<button class="btn-amarillo" onclick="reenviarToken(${r.id})">REENVIAR TOKEN</button>`;
+                    } else if (r.estado === 'FALLO_EXTRACCION') {
+                        accion = `<button class="btn-amarillo" onclick="reintentarQR(${r.id})">REINTENTAR QR</button>`;
+                    } else if (r.estado === 'REINTENTANDO_EXTRACCION') {
+                        accion = `<button class="btn-amarillo" onclick="solicitarRecargaManual(${r.id})">REINTENTAR AHORA</button>`;
+                    } else {
+                        accion = r.estado;
+                    }
+                    return `<tr><td>${r.numero}</td><td>${accion}</td></tr>`;
+                }).join('');
+            }
+        } catch (e) {
+            console.error("Error crítico:", e);
+            // Si hay error, al menos mostramos el body para ver qué pasó
+            document.getElementById('estilo-blindaje').remove();
+        }
+    });
+</script>
+</body>
+</html>
+

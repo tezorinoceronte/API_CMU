@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta Telcel</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; padding: 20px; background-color: #f4f4f9; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 12px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; }
+        button:disabled { background-color: #ccc; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #view { width: 100%; margin-top: 15px; border-radius: 8px; display: none; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h3>Validación de Número</h3>
+    <p id="msgStatus">Ingresar número de 10 dígitos:</p>
+    
+    <input 
+        type="number" 
+        id="numInput" 
+        placeholder="10 dígitos" 
+        oninput="this.value = this.value.slice(0, 10); document.getElementById('btnValidar').disabled = (this.value.length !== 10);"
+    >
+    
+    <button id="btnValidar" onclick="validar()" disabled>Validar</button>
+
+    <div id="loader" class="loader"></div>
+    <div id="alertBox" style="margin-top: 15px; font-size: 14px;"></div>
+    <img id="view" src="" alt="Resultado">
+</div>
+
+<script>
+    async function validar() {
+        const input = document.getElementById('numInput');
+        
+        // Blindaje final por si alguien intenta saltarse el botón
+        if (input.value.length !== 10) return;
+
+        const btn = document.getElementById('btnValidar');
+        const loader = document.getElementById('loader');
+        const alertBox = document.getElementById('alertBox');
+        const view = document.getElementById('view');
+        
+        btn.disabled = true;
+        loader.style.display = 'block';
+        alertBox.innerHTML = "";
+        view.style.display = 'none';
+        
+        try {
+            const res = await fetch('http://localhost:3001/api/validar-numero', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ numero: input.value })
+            });
+            const data = await res.json();
+            
+            if(data.status === 'success') {
+                if(data.iccid) {
+                    alertBox.innerHTML = "<div style='color:green; font-weight:bold;'>✅ ICCID Encontrado:<br>" + data.iccid + "</div>";
+                } else if(data.alerta) {
+                    alertBox.innerHTML = "<div style='color:red; font-weight:bold;'>⚠️ " + data.alerta + "</div>";
+                }
+                view.src = "data:image/png;base64," + data.image;
+                view.style.display = 'block';
+            }
+        } catch (e) {
+            alert("Error de conexión");
+        } finally {
+            loader.style.display = 'none';
+            // Solo reactivamos el botón si el input sigue teniendo 10 dígitos
+            btn.disabled = (input.value.length !== 10);
+        }
+    }
+</script>

@@ -1,0 +1,255 @@
+<style>
+    .loader-card {
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        text-align: center;
+        background: #fff;
+        max-width: 400px;
+        margin: 20px auto;
+    }
+    .progress-track {
+        width: 100%;
+        height: 8px;
+        background: #e0e0e0;
+        border-radius: 4px;
+        overflow: hidden;
+        margin: 15px 0;
+    }
+    #progressBar {
+        width: 0%;
+        height: 100%;
+        background: #007bff;
+        transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); /* Movimiento suave */
+    }
+    .status-text { font-family: sans-serif; font-size: 14px; color: #555; }
+    
+    /* Efecto de parpadeo suave para el texto */
+    @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+    .loading { animation: pulse 1.5s infinite; }
+</style>
+
+
+
+<button id="btnValidar" onclick="ejecutarEsim()">Iniciar</button>
+<button id="btnConfigurar" onclick="ejecutarConfiguracion()" style="display:none;">Configurar eSIM</button>
+<button id="btnManualUpdate" onclick="finalizarEstatus()" style="display:none;">
+    Forzar actualización de estatus
+</button>
+<div id="loaderContainer" class="loader-card" style="display:none;">
+    <div class="progress-track">
+        <div id="progressBar" style="width: 0%; height: 10px; background: #007bff; transition: width 0.3s;"></div>
+    </div>
+    <p class="status-text loading">Conectando a servidor Comunicatec...</p>
+    <img id="mirror" style="width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid #ddd; display:none;" alt="Vista en vivo">
+</div>
+<div id="resultadoContainer" style="display:none;">
+    <h3>Folio: <span id="displayFolio"></span></h3>
+    <p id="contadorMensaje">Generando número...</p>
+    <button id="btnVerQR" style="display:none;" onclick="descargarQR()">Ver QR</button>
+</div>
+
+
+
+
+<input list="ciudadesList" id="ciudadInput" placeholder="Busca tu ciudad...">
+<datalist id="ciudadesList"></datalist>
+<input type="text" id="emailInput" placeholder="Correo electrónico...">
+<input type="text" id="imeiInput" placeholder="IMEI del dispositivo...">
+<script>
+// 1. CARGAR LAS CIUDADES AL INICIAR LA PÁGINA
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const response = await fetch('http://localhost:3000/api/lista-ciudades');
+        const lista = await response.json();
+        const datalist = document.getElementById('ciudadesList');
+        
+        lista.forEach(ciudad => {
+            const option = document.createElement('option');
+            option.value = ciudad;
+            datalist.appendChild(option);
+        });
+        console.log("✅ Lista de ciudades cargada");
+    } catch (err) {
+        console.error("❌ Error al cargar ciudades:", err);
+    }
+});
+
+// 2. FUNCIÓN DE LOGIN
+async function ejecutarEsim() {
+    // ... (Tu código actual de ejecutarEsim es correcto)
+    const statusText = document.querySelector('.status-text');
+    const progressBar = document.getElementById('progressBar');
+    const imgMirror = document.getElementById('mirror');
+    const btnValidar = document.getElementById('btnValidar');
+    const btnConfig = document.getElementById('btnConfigurar');
+    
+    document.getElementById('loaderContainer').style.display = 'block';
+    btnValidar.style.display = 'none';
+    progressBar.style.width = "20%";
+    statusText.innerText = "Conectando al portal Telcel...";
+
+    try {
+        const response = await fetch('http://localhost:3000/api/iniciar-esim', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ userId: "usuario123" })
+        });
+        
+        const result = await response.json();
+        if (result.status !== 'success') throw new Error(result.message);
+
+        progressBar.style.width = "100%";
+        progressBar.style.background = "#28a745";
+        statusText.innerText = "✅ " + result.message;
+
+        if (result.image) {
+            imgMirror.src = "data:image/png;base64," + result.image;
+            imgMirror.style.display = 'block';
+        }
+        btnConfig.style.display = 'block'; 
+        
+    } catch(err) {
+        statusText.innerText = "❌ Error: " + err.message;
+        progressBar.style.background = "#dc3545";
+        btnValidar.style.display = 'block';
+    }
+}
+
+// --- FUNCIÓN 2: CONFIGURACIÓN (CORREGIDA) ---
+
+async function ejecutarConfiguracion() {
+    const ciudad = document.getElementById('ciudadInput').value;
+    const email = document.getElementById('emailInput').value;
+    const imei = document.getElementById('imeiInput').value;
+
+    if (!ciudad || !email || !imei) {
+        alert("⚠️ Por favor, completa Ciudad, Email e IMEI.");
+        return;
+    }
+
+    const statusText = document.querySelector('.status-text');
+    const progressBar = document.getElementById('progressBar');
+    const btnConfig = document.getElementById('btnConfigurar');
+    const imgMirror = document.getElementById('mirror');
+    
+    btnConfig.style.display = 'none';
+    progressBar.style.background = "#007bff";
+    progressBar.style.width = "10%";
+
+    // Barra de progreso simulada
+    const pasos = [
+        { msg: "⚙️ Seleccionando Activación Individual...", width: "20%" },
+        { msg: "⚙️ Seleccionando Producto y SIM...", width: "40%" },
+        { msg: "⚙️ Aplicando esquema de cobro...", width: "60%" },
+        { msg: "⚙️ Escribiendo Email e IMEI...", width: "75%" },
+        { msg: "📍 Seleccionando ciudad: " + ciudad, width: "90%" }
+    ];
+
+    let pasoActual = 0;
+    const interval = setInterval(() => {
+        if (pasoActual < pasos.length) {
+            statusText.innerText = pasos[pasoActual].msg;
+            progressBar.style.width = pasos[pasoActual].width;
+            pasoActual++;
+        }
+    }, 1200);
+
+    try {
+        const response = await fetch('http://localhost:3000/api/configurar-esim', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ userId: "usuario123", ciudadSeleccionada: ciudad, email, imei })
+        });
+        
+        const result = await response.json();
+        clearInterval(interval);
+        
+        if (result.status === 'success') {
+            progressBar.style.width = "100%";
+            progressBar.style.background = "#28a745";
+            statusText.innerText = "🎉 " + result.message;
+            if (result.image) {
+                imgMirror.src = "data:image/png;base64," + result.image;
+            }
+            
+            // --- AQUÍ ESTÁ LA CORRECCIÓN ---
+            // Solo llamamos a procesarFolio cuando estamos seguros de que result fue exitoso
+            await procesarFolio(); 
+            
+        } else {
+            throw new Error(result.message);
+        }
+    } catch (err) {
+        clearInterval(interval);
+        statusText.innerText = "❌ Error: " + err.message;
+        progressBar.style.background = "#dc3545";
+        btnConfig.style.display = 'block';
+    }
+}
+
+async function procesarFolio() {
+    // 1. Obtener folio inicial
+    const response = await fetch('http://localhost:3000/api/obtener-folio');
+    const { folio } = await response.json();
+    document.getElementById('displayFolio').innerText = folio;
+    document.getElementById('resultadoContainer').style.display = 'block';
+
+    // 2. Contador de 10 segundos
+    let segundos = 10;
+    const msg = document.getElementById('contadorMensaje');
+    const interval = setInterval(() => {
+        msg.innerText = `Generando número en ${segundos}s...`;
+        segundos--;
+        if (segundos < 0) {
+            clearInterval(interval);
+            finalizarEstatus();
+        }
+    }, 1000);
+}
+
+async function finalizarEstatus() {
+    const msg = document.getElementById('contadorMensaje');
+    const imgMirror = document.getElementById('mirror');
+    
+    const res = await fetch('http://localhost:3000/api/actualizar-estatus', { method: 'POST' });
+    const data = await res.json();
+    
+    // Actualizar la vista previa
+    if (data.image) {
+        imgMirror.src = "data:image/png;base64," + data.image;
+        imgMirror.style.display = 'block';
+    }
+    
+    // AQUÍ ESTÁ LA CLAVE: Si ya está completado, detén el ciclo
+    if (data.estatus === 'completed') {
+        msg.innerText = "✅ ¡Proceso completado!";
+        msg.style.color = "green";
+        document.getElementById('btnVerQR').style.display = 'block';
+        return; // <--- ESTE RETURN DETIENE EL setTimeout
+    } else {
+        msg.innerText = "⚠️ Estatus: " + (data.estatus || "procesando...") + ". Reintentando...";
+        msg.style.color = "orange";
+        setTimeout(finalizarEstatus, 5000); // Solo sigue si NO es 'completed'
+    }
+}
+async function descargarQR() {
+    const btnVerQR = document.getElementById('btnVerQR');
+    btnVerQR.innerText = "Capturando...";
+    
+    const response = await fetch('http://localhost:3000/api/clic-ver-qr', { method: 'POST' });
+    const data = await response.json();
+    
+    if (data.status === 'success') {
+        // Mostramos la captura directamente
+        const ventana = window.open();
+        ventana.document.write(`<h3>Captura del Portal:</h3><img src="data:image/png;base64,${data.image}" style="width:100%;" />`);
+        
+        btnVerQR.innerText = "Ver QR";
+    } else {
+        alert("Error al capturar: " + data.message);
+        btnVerQR.innerText = "Ver QR";
+    }
+}
+
+</script>
