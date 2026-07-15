@@ -41,7 +41,7 @@ router.post('/login', async (req, res) => {
             maxAge: 3600000 
         });
 
-        await pool.execute('UPDATE usuarios_act_cmu SET intentos_fallidos = 0 WHERE id = ?', [user.id]);
+        await pool.execute('UPDATE public.usuarios_act_cmu SET intentos_fallidos = 0 WHERE id = ?', [user.id]);
         return res.json({ success: true, message: "Bienvenido" });
 
     } catch (err) {
@@ -78,7 +78,7 @@ router.post('/registro', async (req, res) => {
         const passwordHash = await bcrypt.hash(password, 12);
         
         await pool.execute(
-            'INSERT INTO usuarios_act_cmu (nombre_completo, correo, password_hash, rol, estado, municipio, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO public.usuarios_act_cmu (nombre_completo, correo, password_hash, rol, estado, municipio, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [nombre, correo, passwordHash, rol, estado, municipio, creatorId]
         );
         
@@ -104,8 +104,8 @@ router.get('/me', async (req, res) => {
         const [rows] = await pool.execute(`
             SELECT u.nombre_completo, u.rol, u.estado, u.municipio, 
                    COALESCE(creator.nombre_completo, 'No tiene creador') AS nombre_creador 
-            FROM usuarios_act_cmu u 
-            LEFT JOIN usuarios_act_cmu creator ON u.parent_id = creator.id 
+            FROM public.usuarios_act_cmu u 
+            LEFT JOIN public.usuarios_act_cmu creator ON u.parent_id = creator.id 
             WHERE u.id = ?`, [cookieData.userId]);
             
         const user = rows[0];
@@ -124,7 +124,7 @@ router.get('/me', async (req, res) => {
 
 router.get('/usuarios', async (req, res) => {
     try {
-        const [rows] = await pool.execute('SELECT * FROM usuarios_act_cmu ORDER BY id DESC');
+        const [rows] = await pool.execute('SELECT * FROM public.usuarios_act_cmu ORDER BY id DESC');
         
         let html = `
         <style>
