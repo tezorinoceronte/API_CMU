@@ -15,7 +15,7 @@ router.post('/login', async (req, res) => {
     }
 
     try {
-        const [rows] = await pool.execute('SELECT * FROM usuarios_act_cmu WHERE correo = ?', [correo]);
+        const [rows] = await pool.execute('SELECT * FROM public.usuarios_act_cmu WHERE correo = ?', [correo]);
         const user = rows[0];
 
         if (!user || !(await bcrypt.compare(password, user.password_hash))) {
