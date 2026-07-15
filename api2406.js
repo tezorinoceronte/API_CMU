@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken'); // Necesario para el token
 const bcrypt = require('bcrypt');
 const { pool } = require('./cola');
 
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = 'clave_secreta_2026'; // Define esto aquí
@@ -131,7 +132,7 @@ app.post('/api/solicitar-consulta', verifyToken, async (req, res) => {
 
     try {
         const [result] = await pool.execute(
-            `INSERT INTO cola_tareas (user_id, numero, portal, estado, tipo_tarea) VALUES (?, ?, ?, 'PENDIENTE', ?)`,
+            `INSERT INTO public.cola_tareas (user_id, numero, portal, estado, tipo_tarea) VALUES (?, ?, ?, 'PENDIENTE', ?)`,
             [userId, numero, portal || 'TELCEL', tipo || 'RECARGA']
         );
         
@@ -152,7 +153,7 @@ app.get('/api/estado-consolidado/:numero', verifyToken, async (req, res) => {
 
         // QUITAMOS EL FILTRO DE 'COMPLETADO' PARA QUE EL VIGILANTE PUEDA VER EL PROCESO
         const [rows] = await pool.execute(`
-            SELECT * FROM cola_tareas 
+            SELECT * FROM public.cola_tareas 
             WHERE numero = ? 
             AND user_id = ? 
             ORDER BY id DESC LIMIT 1
@@ -175,7 +176,7 @@ app.get('/api/verificar-estado/:id',  verifyToken, async (req, res) => {
         console.log("🔍 Consultando ID:", req.params.id);
         
         // Usamos una consulta simple para ver qué hay realmente en la base de datos
-        const [rows] = await pool.execute("SELECT estado, resultado FROM cola_tareas WHERE id = ?", [req.params.id]);
+        const [rows] = await pool.execute("SELECT estado, resultado FROM public.public.cola_tareas WHERE id = ?", [req.params.id]);
         
         if (rows.length > 0) {
             const registro = rows[0];
@@ -213,7 +214,7 @@ app.get('/api/obtener-resultado-final/:userId/:numero',  verifyToken,  async (re
     try {
         const { userId, numero } = req.params;
         const [rows] = await pool.execute(
-            `SELECT resultado FROM cola_tareas 
+            `SELECT resultado FROM public.cola_tareas 
              WHERE user_id = ? AND numero = ? AND resultado IS NOT NULL
              ORDER BY id DESC LIMIT 3`, // Aumentamos a 3 por si hay ruido
             [userId, numero]
@@ -253,7 +254,7 @@ app.get('/api/procesos',  async (req, res) => {
     try {
         const [rows] = await pool.execute(`
             SELECT ct.*, u.nombre_completo 
-            FROM cola_tareas ct 
+            FROM public.cola_tareas ct 
             LEFT JOIN usuarios_act_cmu u ON ct.user_id = u.id 
             ORDER BY ct.id DESC LIMIT 50
         `);
@@ -331,9 +332,9 @@ app.get('/api/ultimas-lineas', verifyToken, async (req, res) => {
         console.log("Consultando tareas para user_id:", userId); // <-- MIRA LA CONSOLA DEL SERVIDOR
 
         const [rows] = await pool.execute(`
-            SELECT * FROM cola_tareas 
+            SELECT * FROM public.cola_tareas 
             WHERE user_id = ? 
-            AND id IN (SELECT MAX(id) FROM cola_tareas WHERE user_id = ? GROUP BY numero)
+            AND id IN (SELECT MAX(id) FROM public.cola_tareas WHERE user_id = ? GROUP BY numero)
             ORDER BY id DESC LIMIT 10
         `, [userId, userId]);
 
@@ -349,7 +350,7 @@ app.get('/api/ultimas-lineas', verifyToken, async (req, res) => {
 app.get('/api/estado-actual2/:numero', verifyToken,  async (req, res) => {
     try {
         const query = `
-            SELECT * FROM cola_tareas 
+            SELECT * FROM public.cola_tareas 
             WHERE numero = ? 
             AND iccid IS NOT NULL 
             AND created_at >= NOW() - INTERVAL 10 MINUTE
@@ -401,7 +402,7 @@ app.post('/api/enviar-token',  verifyToken, async (req, res) => {
         // Actualizamos el token y cambiamos el estado a 'VALIDANDO_TOKEN'
         // Esto le indica al Dispatcher que la tarea ya tiene datos listos para ser procesados
         const [result] = await pool.execute(
-            "UPDATE cola_tareas SET token = ?, estado = 'VALIDANDO_TOKEN' WHERE id = ?", 
+            "UPDATE public.cola_tareas SET token = ?, estado = 'VALIDANDO_TOKEN' WHERE id = ?", 
             [token, tareaId]
         );
 
@@ -436,7 +437,7 @@ app.post('/api/actualizar-token', verifyToken,  async (req, res) => {
         // 2. Cambiamos el estado a 'VALIDANDO_TOKEN' para que el Dispatcher lo procese
         // 3. Limpiamos el 'resultado' (el error anterior) para empezar de cero
         await connection.execute(
-            "UPDATE cola_tareas SET token = ?, estado = 'VALIDANDO_TOKEN', resultado = NULL WHERE id = ?",
+            "UPDATE public.cola_tareas SET token = ?, estado = 'VALIDANDO_TOKEN', resultado = NULL WHERE id = ?",
             [nuevoToken, tareaId]
         );
         
@@ -458,7 +459,7 @@ app.get('/api/estado-tarea/:tareaId', verifyToken, async (req, res) => {
 
         // AGREGADO: Se incluyó 'link_final' y 'numero' en el SELECT
         const [rows] = await pool.execute(
-            "SELECT estado, resultado, numero, link_final FROM cola_tareas WHERE id = ? AND user_id = ?", 
+            "SELECT estado, resultado, numero, link_final FROM public.cola_tareas WHERE id = ? AND user_id = ?", 
             [tareaId, userId]
         );
 
@@ -491,7 +492,7 @@ app.post('/api/reintentar', verifyToken, async (req, res) => {
     
     try {
         const [result] = await connection.execute(
-            "UPDATE cola_tareas SET estado = 'REINTENTAR_QR', resultado = NULL WHERE id = ? AND user_id = ?", 
+            "UPDATE public.cola_tareas SET estado = 'REINTENTAR_QR', resultado = NULL WHERE id = ? AND user_id = ?", 
             [tareaId, req.user.id] // Agregué el user_id por seguridad
         );
         
@@ -530,7 +531,7 @@ app.post('/api/solicitar-activacion', verifyToken, async (req, res) => {
     try {
         // 2. INSERTAMOS USANDO EL userId OBTENIDO DEL JWT
         const [result] = await pool.execute(
-            `INSERT INTO cola_tareas (tipo_tarea, user_id, portal, ciudad, ciudad_id, iccid, imei, correo, estado) 
+            `INSERT INTO public.cola_tareas (tipo_tarea, user_id, portal, ciudad, ciudad_id, iccid, imei, correo, estado) 
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [tipo_tarea, userId, portal || 'TELCEL', ciudad, ciudad_id, iccid, imei, correo, estadoInicial]
         );
@@ -552,7 +553,7 @@ app.post('/api/recuperacion-paso-nueve/:tareaId', verifyToken, async (req, res) 
     try {
         // CORRECCIÓN: Filtramos por ID Y por el ID del usuario del token
         const [result] = await pool.execute(
-            `UPDATE cola_tareas 
+            `UPDATE public.cola_tareas 
              SET estado = 'ACT_ESIM_REINTENTAR', 
                  resultado = NULL 
              WHERE id = ? AND user_id = ?`, // <--- SEGURIDAD AÑADIDA
@@ -584,7 +585,7 @@ app.get('/api/estado-tarea-ACT/:id', verifyToken, async (req, res) => {
         const [rows] = await pool.execute(
             `SELECT estado, resultado, estatus_act, numero, correo, folio_act, iccid, link_final, imei, user_id, 
                     linea_registrada, fecha_recarga 
-             FROM cola_tareas WHERE id = ?`, 
+             FROM public.cola_tareas WHERE id = ?`, 
             [req.params.id]
         );
         
@@ -623,7 +624,7 @@ app.post('/api/ejecutar-qr-registro/:tareaId', verifyToken, async (req, res) => 
         // 1. VALIDACIÓN DE PROPIEDAD: 
         // Verificamos que la tarea exista Y pertenezca al usuario del token (req.user.id)
         const [rows] = await pool.query(
-            "SELECT id FROM cola_tareas WHERE id = ? AND user_id = ?", 
+            "SELECT id FROM public.cola_tareas WHERE id = ? AND user_id = ?", 
             [tareaId, req.user.id]
         );
         
@@ -637,7 +638,7 @@ app.post('/api/ejecutar-qr-registro/:tareaId', verifyToken, async (req, res) => 
         // 2. ACTUALIZACIÓN SEGURA:
         // Aseguramos que el UPDATE solo afecte si el user_id coincide
         const [result] = await pool.query(
-            "UPDATE cola_tareas SET estado = 'ACT_ESIM_EXITOSA_QR', fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?", 
+            "UPDATE public.cola_tareas SET estado = 'ACT_ESIM_EXITOSA_QR', fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?", 
             [tareaId, req.user.id]
         );
 
@@ -657,7 +658,7 @@ app.post('/api/vincular-biometricos-act/:id', verifyToken, async (req, res) => {
     try {
         // ACTUALIZACIÓN SEGURA: Filtramos por ID Y user_id
         const [result] = await pool.execute(
-            "UPDATE cola_tareas SET estado = 'ACT_ESIM_VINCULAR' WHERE id = ? AND user_id = ?", 
+            "UPDATE public.cola_tareas SET estado = 'ACT_ESIM_VINCULAR' WHERE id = ? AND user_id = ?", 
             [id, req.user.id]
         );
 
@@ -676,7 +677,7 @@ app.get('/api/obtener-resultado-vincular/:id', verifyToken, async (req, res) => 
     try {
         // FILTRO DE SEGURIDAD: Añadimos AND user_id = ?
         const [rows] = await pool.execute(
-            "SELECT estado, resultado, numero, correo, imei, folio_act FROM cola_tareas WHERE id = ? AND user_id = ?",
+            "SELECT estado, resultado, numero, correo, imei, folio_act FROM public.cola_tareas WHERE id = ? AND user_id = ?",
             [id, req.user.id]
         );
         
@@ -716,7 +717,7 @@ app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
         // 1. VALIDACIÓN DE PROPIEDAD: 
         // Verificamos que la tarea exista Y pertenezca al usuario del token (req.user.id)
         const [rows] = await pool.execute(
-            "SELECT id FROM cola_tareas WHERE id = ? AND user_id = ?", 
+            "SELECT id FROM public.cola_tareas WHERE id = ? AND user_id = ?", 
             [id, req.user.id]
         );
 
@@ -730,7 +731,7 @@ app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
         // 2. ACTUALIZACIÓN SEGURA: 
         // Filtramos por ID y user_id para garantizar que nadie modifique lo ajeno
         const [result] = await pool.execute(
-            "UPDATE cola_tareas SET estado = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?", 
+            "UPDATE public.cola_tareas SET estado = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?", 
             [estadoLimpio, id, req.user.id]
         );
 
