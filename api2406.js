@@ -2,24 +2,31 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs-extra');
-const jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken'); // Necesario para el token111
 const bcrypt = require('bcrypt');
 const { pool } = require('./cola');
 
+
 const app = express();
-const PORT = process.env.PORT || 10000;
-const JWT_SECRET = 'clave_secreta_2026';
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = 'clave_secreta_2026'; // Define esto aquí
 const screenshotsDir = path.join(__dirname, 'screenshots');
 
 fs.ensureDirSync(screenshotsDir);
 
-// Middlewares básicos
-app.use(cors({ origin: '*', credentials: true }));
+// Configuración básica
+app.use(cors({
+    origin: '*', // Permite peticiones desde cualquier lugar
+    credentials: true
+}));
+
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/screenshots', express.static(screenshotsDir));
 
-// Middleware de verificación de Token
+
+// --- ESTE MIDDLEWARE REEMPLAZA A TU "AUTH" DE SESIÓN ---
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -28,14 +35,12 @@ const verifyToken = (req, res, next) => {
 
     jwt.verify(token, JWT_SECRET, (err, decoded) => {
         if (err) return res.status(403).json({ error: "Token inválido" });
-        req.user = decoded;
+        req.user = decoded; // Ahora tienes el usuario en req.user.id
         next();
     });
 };
 
-// --- RUTAS DE AUTENTICACIÓN ---
-// IMPORTANTE: Si ya tienes este post en 'login.js', 
-// elimina este bloque aquí para evitar duplicados
+// --- TUS RUTAS ---
 app.post('/auth/login', async (req, res) => {
     const { correo, password } = req.body;
     try {
@@ -49,24 +54,44 @@ app.post('/auth/login', async (req, res) => {
         const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '24h' });
         res.json({ success: true, token: token }); 
     } catch (err) {
-        console.error("Error en login:", err);
         res.status(500).json({ success: false, message: "Error interno" });
     }
 });
 
-// Rutas protegidas
+// Ejemplo de ruta protegida usando el token
 app.get('/api/check-session', verifyToken, (req, res) => {
     res.json({ active: true, userId: req.user.id });
 });
-
 app.get('/api/auth/me', verifyToken, (req, res) => {
+    // req.user.id viene del token que ya validaste con verifyToken
     res.json({ success: true, id: req.user.id });
 });
 
-// RUTA LOGOUT (CORREGIDA: Eliminamos req.session porque no configuraste sesiones)
+
+
+// API DE DEPURACIÓN (Corregida para leer la sesión de express-session)
+app.get('/api/ver-usuario-sesion', (req, res) => {
+    if (req.session && req.session.usuarioId) {
+        console.log("Datos en sesión:", req.session);
+        res.json({ 
+            success: true, 
+            id_en_sesion: req.session.usuarioId,
+            rol_en_sesion: req.session.rol 
+        });
+    } else {
+        res.json({ success: false, message: "No hay sesión activa" });
+    }
+});
+
+
+
+// RUTA DE LOGOUT
 app.post('/logout', (req, res) => {
-    // Si usas JWT, el logout se hace en el cliente borrando el token de localStorage
-    res.json({ success: true, message: "Sesión cerrada en cliente" });
+    req.session.destroy((err) => {
+        if (err) return res.status(500).json({ success: false, message: "Error al cerrar" });
+        res.clearCookie('miSessionID'); 
+        res.json({ success: true, message: "Sesión cerrada correctamente" });
+    });
 });
 
 //-----------------------------------------------------
@@ -104,7 +129,7 @@ app.post('/api/solicitar-consulta', verifyToken, async (req, res) => {
         console.warn(`⚠️ [API] Intento de tarea fallido: Faltan datos. User: ${userId}, Numero: ${numero}`);
         return res.status(400).json({ error: "Datos incompletos" });
     }
-    
+
     console.log(`🆕 [API] Usuario ${userId} solicita tarea: ${tipo || 'RECARGA'} para el número: ${numero}`);
 
     try {
@@ -112,10 +137,10 @@ app.post('/api/solicitar-consulta', verifyToken, async (req, res) => {
             `INSERT INTO public.cola_tareas (user_id, numero, portal, estado, tipo_tarea) VALUES (?, ?, ?, 'PENDIENTE', ?)`,
             [userId, numero, portal || 'TELCEL', tipo || 'RECARGA']
         );
-        
+
         console.log(`✅ [API] Tarea creada exitosamente con ID: ${result.insertId}`);
         res.json({ tareaId: result.insertId, status: "Tarea creada" });
-        
+
     } catch (error) {
         console.error(`❌ [API] Error crítico al insertar tarea:`, error);
         res.status(500).json({ error: "Error interno del servidor al crear tarea" });
@@ -151,13 +176,13 @@ app.get('/api/estado-consolidado/:numero', verifyToken, async (req, res) => {
 app.get('/api/verificar-estado/:id',  verifyToken, async (req, res) => {
     try {
         console.log("🔍 Consultando ID:", req.params.id);
-        
+
         // Usamos una consulta simple para ver qué hay realmente en la base de datos
         const [rows] = await pool.execute("SELECT estado, resultado FROM public.cola_tareas WHERE id = ?", [req.params.id]);
-        
+
         if (rows.length > 0) {
             const registro = rows[0];
-            
+
             // Log para debuggear en tu terminal de VS Code
             console.log("✅ Registro encontrado:", registro);
 
@@ -198,7 +223,7 @@ app.get('/api/obtener-resultado-final/:userId/:numero',  verifyToken,  async (re
         );
 
         let resultadoUnificado = {};
-        
+
         rows.forEach(row => {
             try {
                 // Solo intentamos parsear si parece un JSON
@@ -206,7 +231,7 @@ app.get('/api/obtener-resultado-final/:userId/:numero',  verifyToken,  async (re
                     let data = JSON.parse(row.resultado);
                     // Si el parseo es doble, lo volvemos a intentar
                     if (typeof data === 'string') data = JSON.parse(data);
-                    
+
                     // Solo combinamos si es un objeto válido
                     if (typeof data === 'object' && data !== null) {
                         resultadoUnificado = { ...resultadoUnificado, ...data };
@@ -235,7 +260,7 @@ app.get('/api/procesos',  async (req, res) => {
             LEFT JOIN public.usuarios_act_cmu u ON ct.user_id = u.id 
             ORDER BY ct.id DESC LIMIT 50
         `);
-        
+
         let html = `
         <style>
             body { font-family: sans-serif; margin: 10px; }
@@ -296,7 +321,7 @@ app.get('/api/procesos',  async (req, res) => {
             `).join('')}
         </table>
         <script>setTimeout(() => location.reload(), 550000);</script>`;
-        
+
         res.send(html);
     } catch (err) {
         res.status(500).send("Error: " + err.message);
@@ -332,9 +357,9 @@ app.get('/api/estado-actual2/:numero', verifyToken,  async (req, res) => {
             AND iccid IS NOT NULL 
             AND created_at >= NOW() - INTERVAL 10 MINUTE
             ORDER BY id DESC LIMIT 1`;
-            
+
         const [rows] = await pool.execute(query, [req.params.numero]);
-        
+
         // Si no hay nada en los últimos 10 minutos, devolvemos un objeto vacío
         res.json(rows.length > 0 ? rows[0] : {});
     } catch (err) {
@@ -345,15 +370,15 @@ app.get('/api/estado-actual2/:numero', verifyToken,  async (req, res) => {
 // Ruta para RECARGA y SIN REGISTRO LA QUE ME HIZO BORRAR
 app.post('/api/ejecutar-accion2', verifyToken,  async (req, res) => {
     const { userId, numero, tipo } = req.body;
-    
+
     // Si el usuario presiona "RECARGA" (Botón automático)
     if (tipo === 'RECARGA') {
         const resultado = await hacerClicEnDatosLinea(page, numero, userId, tipo);
         res.json({ status: 'success', data: resultado });
     }
-    
+
     // Si el usuario presiona "REGISTRAR BIOMÉTRICOS" (Manual)
- 
+
 });
 
 // LLAMA A EJECUTAR ACCIONES TELCEL
@@ -365,7 +390,7 @@ app.post('/api/ejecutar-accion2', verifyToken,  async (req, res) => {
 
 app.post('/api/enviar-token',  verifyToken, async (req, res) => {
     const { tareaId, token } = req.body;
-    
+
     console.log(`📡 [API] Token recibido: "${token}" para Tarea ID: ${tareaId}`);
 
     if (!tareaId || !token) {
@@ -403,7 +428,7 @@ app.post('/api/enviar-token',  verifyToken, async (req, res) => {
 
 app.post('/api/actualizar-token', verifyToken,  async (req, res) => {
     const { tareaId, nuevoToken } = req.body;
-    
+
     if (!tareaId || !nuevoToken) {
         return res.status(400).json({ success: false, message: "Datos incompletos" });
     }
@@ -417,7 +442,7 @@ app.post('/api/actualizar-token', verifyToken,  async (req, res) => {
             "UPDATE public.cola_tareas SET token = ?, estado = 'VALIDANDO_TOKEN', resultado = NULL WHERE id = ?",
             [nuevoToken, tareaId]
         );
-        
+
         res.json({ success: true, message: "Token actualizado correctamente" });
     } catch (err) {
         res.status(500).json({ success: false, message: "Error al actualizar BD" });
@@ -464,15 +489,15 @@ app.get('/api/estado-tarea/:tareaId', verifyToken, async (req, res) => {
 app.post('/api/reintentar', verifyToken, async (req, res) => {
     const { tareaId } = req.body;
     console.log(`📡 [Backend] Solicitud de REINTENTO recibida para ID: ${tareaId} por Usuario: ${req.user.id}`);
-    
+
     const connection = await pool.getConnection();
-    
+
     try {
         const [result] = await connection.execute(
             "UPDATE public.cola_tareas SET estado = 'REINTENTAR_QR', resultado = NULL WHERE id = ? AND user_id = ?", 
             [tareaId, req.user.id] // Agregué el user_id por seguridad
         );
-        
+
         if (result.affectedRows > 0) {
             console.log(`✅ [Backend] Base de datos actualizada: Estado cambiado a REINTENTAR_QR para ID: ${tareaId}`);
             res.json({ success: true, message: "Reintento activado" });
@@ -495,7 +520,7 @@ app.post('/api/solicitar-activacion', verifyToken, async (req, res) => {
     // 1. OBTENEMOS EL ID DESDE EL TOKEN JWT
     // El middleware 'verifyToken' debe haber guardado los datos en 'req.user'
     const userId = req.user ? req.user.id : null; 
-    
+
     // Si no hay ID en el token, rechazamos la petición
     if (!userId) {
         console.warn("⚠️ Intento de activación sin token válido.");
@@ -504,7 +529,7 @@ app.post('/api/solicitar-activacion', verifyToken, async (req, res) => {
 
     const { tipo_tarea, portal, ciudad, ciudad_id, iccid, imei, correo } = req.body;
     const estadoInicial = (tipo_tarea === 'ACT_ESIM') ? 'ACT_ESIM' : 'ACT_FISICA';
-    
+
     try {
         // 2. INSERTAMOS USANDO EL userId OBTENIDO DEL JWT
         const [result] = await pool.execute(
@@ -512,10 +537,10 @@ app.post('/api/solicitar-activacion', verifyToken, async (req, res) => {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [tipo_tarea, userId, portal || 'TELCEL', ciudad, ciudad_id, iccid, imei, correo, estadoInicial]
         );
-        
+
         console.log(`✅ Tarea creada con ID: ${result.insertId} para el usuario: ${userId}`);
         res.json({ success: true, id: result.insertId }); 
-        
+
     } catch (err) {
         console.error("❌ Error al insertar en BD:", err);
         res.status(500).json({ success: false, error: "Error interno del servidor" });
@@ -565,7 +590,7 @@ app.get('/api/estado-tarea-ACT/:id', verifyToken, async (req, res) => {
              FROM public.cola_tareas WHERE id = ?`, 
             [req.params.id]
         );
-        
+
         if (rows.length === 0) {
             return res.status(404).json({ error: "Tarea no encontrada" });
         }
@@ -593,10 +618,10 @@ app.get('/api/estado-tarea-ACT/:id', verifyToken, async (req, res) => {
 
 //-- VER QR ESIM
 // Asegúrate de que esto coincida con lo que usas en el resto del archivo
- 
+
 app.post('/api/ejecutar-qr-registro/:tareaId', verifyToken, async (req, res) => {
     const { tareaId } = req.params;
-    
+
     try {
         // 1. VALIDACIÓN DE PROPIEDAD: 
         // Verificamos que la tarea exista Y pertenezca al usuario del token (req.user.id)
@@ -604,7 +629,7 @@ app.post('/api/ejecutar-qr-registro/:tareaId', verifyToken, async (req, res) => 
             "SELECT id FROM public.cola_tareas WHERE id = ? AND user_id = ?", 
             [tareaId, req.user.id]
         );
-        
+
         if (rows.length === 0) {
             return res.status(403).json({ 
                 success: false, 
@@ -657,7 +682,7 @@ app.get('/api/obtener-resultado-vincular/:id', verifyToken, async (req, res) => 
             "SELECT estado, resultado, numero, correo, imei, folio_act FROM public.cola_tareas WHERE id = ? AND user_id = ?",
             [id, req.user.id]
         );
-        
+
         if (rows.length > 0) {
             res.json({ 
                 estado: rows[0].estado, 
@@ -719,7 +744,7 @@ app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
 
     } catch (err) {
         console.error("❌ ERROR CRÍTICO EN SQL:", err.message);
-        
+
         if (err.errno === 1265 || err.errno === 1366) {
             return res.status(400).json({ 
                 success: false, 
