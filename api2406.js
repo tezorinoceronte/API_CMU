@@ -50,8 +50,14 @@ const verifyToken = (req, res, next) => {
 app.post('/auth/login', async (req, res) => {
     const { correo, password } = req.body;
     try {
-        const [rows] = await pool.execute('SELECT * FROM public.usuarios_act_cmu WHERE correo = ?', [correo]);
-        const user = rows[0];
+        // CORRECCIÓN 1: Usamos $1 en lugar de ?
+        const query = 'SELECT * FROM public.usuarios_act_cmu WHERE correo = $1';
+        
+        // CORRECCIÓN 2: Ejecutamos el query
+        const result = await pool.query(query, [correo]);
+        
+        // CORRECCIÓN 3: Extraemos los datos de result.rows
+        const user = result.rows[0];
 
         if (!user || !(await bcrypt.compare(password, user.password_hash))) {
             return res.status(401).json({ success: false, message: "Credenciales incorrectas" });
@@ -60,6 +66,7 @@ app.post('/auth/login', async (req, res) => {
         const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '24h' });
         res.json({ success: true, token: token }); 
     } catch (err) {
+        console.error("Error en login:", err); // Log para ver el detalle en consola
         res.status(500).json({ success: false, message: "Error interno" });
     }
 });
@@ -139,7 +146,7 @@ app.post('/api/solicitar-consulta', verifyToken, async (req, res) => {
     console.log(`🆕 [API] Usuario ${userId} solicita tarea: ${tipo || 'RECARGA'} para el número: ${numero}`);
 
     try {
-        const [result] = await pool.execute(
+        const [result] = await pool.query(
             `INSERT INTO public.cola_tareas (user_id, numero, portal, estado, tipo_tarea) VALUES (?, ?, ?, 'PENDIENTE', ?)`,
             [userId, numero, portal || 'TELCEL', tipo || 'RECARGA']
         );
@@ -160,7 +167,7 @@ app.get('/api/estado-consolidado/:numero', verifyToken, async (req, res) => {
         const userId = req.user.id;
 
         // QUITAMOS EL FILTRO DE 'COMPLETADO' PARA QUE EL VIGILANTE PUEDA VER EL PROCESO
-        const [rows] = await pool.execute(`
+        const [rows] = await pool.query(`
             SELECT * FROM public.cola_tareas 
             WHERE numero = ? 
             AND user_id = ? 
@@ -184,7 +191,7 @@ app.get('/api/verificar-estado/:id',  verifyToken, async (req, res) => {
         console.log("🔍 Consultando ID:", req.params.id);
 
         // Usamos una consulta simple para ver qué hay realmente en la base de datos
-        const [rows] = await pool.execute("SELECT estado, resultado FROM public.cola_tareas WHERE id = ?", [req.params.id]);
+        const [rows] = await pool.query("SELECT estado, resultado FROM public.cola_tareas WHERE id = ?", [req.params.id]);
 
         if (rows.length > 0) {
             const registro = rows[0];
@@ -221,7 +228,7 @@ app.get('/api/verificar-estado/:id',  verifyToken, async (req, res) => {
 app.get('/api/obtener-resultado-final/:userId/:numero',  verifyToken,  async (req, res) => {
     try {
         const { userId, numero } = req.params;
-        const [rows] = await pool.execute(
+        const [rows] = await pool.query(
             `SELECT resultado FROM public.cola_tareas 
              WHERE user_id = ? AND numero = ? AND resultado IS NOT NULL
              ORDER BY id DESC LIMIT 3`, // Aumentamos a 3 por si hay ruido
@@ -260,7 +267,7 @@ app.get('/api/obtener-resultado-final/:userId/:numero',  verifyToken,  async (re
 
 app.get('/api/procesos',  async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await pool.query(`
             SELECT ct.*, u.nombre_completo 
             FROM public.cola_tareas ct 
             LEFT JOIN public.usuarios_act_cmu u ON ct.user_id = u.id 
@@ -339,7 +346,7 @@ app.get('/api/ultimas-lineas', verifyToken, async (req, res) => {
         const userId = req.user.id; 
         console.log("Consultando tareas para user_id:", userId); // <-- MIRA LA CONSOLA DEL SERVIDOR
 
-        const [rows] = await pool.execute(`
+        const [rows] = await pool.query(`
             SELECT * FROM public.cola_tareas 
             WHERE user_id = ? 
             AND id IN (SELECT MAX(id) FROM public.cola_tareas WHERE user_id = ? GROUP BY numero)
@@ -364,7 +371,7 @@ app.get('/api/estado-actual2/:numero', verifyToken,  async (req, res) => {
             AND created_at >= NOW() - INTERVAL 10 MINUTE
             ORDER BY id DESC LIMIT 1`;
 
-        const [rows] = await pool.execute(query, [req.params.numero]);
+        const [rows] = await pool.query(query, [req.params.numero]);
 
         // Si no hay nada en los últimos 10 minutos, devolvemos un objeto vacío
         res.json(rows.length > 0 ? rows[0] : {});
@@ -409,7 +416,7 @@ app.post('/api/enviar-token',  verifyToken, async (req, res) => {
     try {
         // Actualizamos el token y cambiamos el estado a 'VALIDANDO_TOKEN'
         // Esto le indica al Dispatcher que la tarea ya tiene datos listos para ser procesados
-        const [result] = await pool.execute(
+        const [result] = await pool.query(
             "UPDATE public.cola_tareas SET token = ?, estado = 'VALIDANDO_TOKEN' WHERE id = ?", 
             [token, tareaId]
         );
@@ -466,7 +473,7 @@ app.get('/api/estado-tarea/:tareaId', verifyToken, async (req, res) => {
         const userId = req.user.id;
 
         // AGREGADO: Se incluyó 'link_final' y 'numero' en el SELECT
-        const [rows] = await pool.execute(
+        const [rows] = await pool.query(
             "SELECT estado, resultado, numero, link_final FROM public.cola_tareas WHERE id = ? AND user_id = ?", 
             [tareaId, userId]
         );
@@ -538,7 +545,7 @@ app.post('/api/solicitar-activacion', verifyToken, async (req, res) => {
 
     try {
         // 2. INSERTAMOS USANDO EL userId OBTENIDO DEL JWT
-        const [result] = await pool.execute(
+        const [result] = await pool.query(
             `INSERT INTO public.cola_tareas (tipo_tarea, user_id, portal, ciudad, ciudad_id, iccid, imei, correo, estado) 
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [tipo_tarea, userId, portal || 'TELCEL', ciudad, ciudad_id, iccid, imei, correo, estadoInicial]
@@ -560,7 +567,7 @@ app.post('/api/recuperacion-paso-nueve/:tareaId', verifyToken, async (req, res) 
 
     try {
         // CORRECCIÓN: Filtramos por ID Y por el ID del usuario del token
-        const [result] = await pool.execute(
+        const [result] = await pool.query(
             `UPDATE public.cola_tareas 
              SET estado = 'ACT_ESIM_REINTENTAR', 
                  resultado = NULL 
@@ -590,7 +597,7 @@ app.get('/api/estado-tarea-ACT/:id', verifyToken, async (req, res) => {
 
     try {
         // CORRECCIÓN: Se agregaron 'linea_registrada' y 'fecha_recarga' al SELECT
-        const [rows] = await pool.execute(
+        const [rows] = await pool.query(
             `SELECT estado, resultado, estatus_act, numero, correo, folio_act, iccid, link_final, imei, user_id, 
                     linea_registrada, fecha_recarga 
              FROM public.cola_tareas WHERE id = ?`, 
@@ -665,7 +672,7 @@ app.post('/api/vincular-biometricos-act/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     try {
         // ACTUALIZACIÓN SEGURA: Filtramos por ID Y user_id
-        const [result] = await pool.execute(
+        const [result] = await pool.query(
             "UPDATE public.cola_tareas SET estado = 'ACT_ESIM_VINCULAR' WHERE id = ? AND user_id = ?", 
             [id, req.user.id]
         );
@@ -684,7 +691,7 @@ app.get('/api/obtener-resultado-vincular/:id', verifyToken, async (req, res) => 
     const { id } = req.params;
     try {
         // FILTRO DE SEGURIDAD: Añadimos AND user_id = ?
-        const [rows] = await pool.execute(
+        const [rows] = await pool.query(
             "SELECT estado, resultado, numero, correo, imei, folio_act FROM public.cola_tareas WHERE id = ? AND user_id = ?",
             [id, req.user.id]
         );
@@ -724,7 +731,7 @@ app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
     try {
         // 1. VALIDACIÓN DE PROPIEDAD: 
         // Verificamos que la tarea exista Y pertenezca al usuario del token (req.user.id)
-        const [rows] = await pool.execute(
+        const [rows] = await pool.query(
             "SELECT id FROM public.cola_tareas WHERE id = ? AND user_id = ?", 
             [id, req.user.id]
         );
@@ -738,7 +745,7 @@ app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
 
         // 2. ACTUALIZACIÓN SEGURA: 
         // Filtramos por ID y user_id para garantizar que nadie modifique lo ajeno
-        const [result] = await pool.execute(
+        const [result] = await pool.query(
             "UPDATE public.cola_tareas SET estado = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?", 
             [estadoLimpio, id, req.user.id]
         );
