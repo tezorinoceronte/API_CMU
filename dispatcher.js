@@ -36,7 +36,7 @@ async function iniciarDispatcher() {
             await limpiarSesionesInactivas();
             
             const carga = await ejecutarQuery(
-                "SELECT worker_id, COUNT(*) as activas FROM cola_tareas WHERE estado IN ('PROCESANDO', 'PROCESANDO_ESIM') GROUP BY worker_id"
+                "SELECT worker_id, COUNT(*) as activas FROM public.cola_tareas WHERE estado IN ('PROCESANDO', 'PROCESANDO_ESIM') GROUP BY worker_id"
             );
             
             const mapaCarga = (carga || []).reduce((acc, row) => {
@@ -45,7 +45,7 @@ async function iniciarDispatcher() {
             }, {});
 
             const tareas = await ejecutarQuery(
-                `SELECT id FROM cola_tareas 
+                `SELECT id FROM public.cola_tareas 
                  WHERE worker_id IS NULL 
                  AND estado IN ('PENDIENTE', 'ACT_ESIM', 'ACT_FISICA', 'REINTENTAR_QR', 'ACT_ESIM_REINTENTAR', 'ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO') 
                  LIMIT 10`
@@ -60,7 +60,7 @@ async function iniciarDispatcher() {
 
                         if (ocupacion < MAX_CONCURRENTES_POR_WORKER) {
                             await ejecutarQuery(
-                                `UPDATE cola_tareas SET estado = 'ASIGNADO', worker_id = $1, fecha_actualizacion = NOW() WHERE id = $2`,
+                                `UPDATE public.cola_tareas SET estado = 'ASIGNADO', worker_id = $1, fecha_actualizacion = NOW() WHERE id = $2`,
                                 [idWorker, tarea.id]
                             );
                             mapaCarga[idWorker] = ocupacion + 1;
