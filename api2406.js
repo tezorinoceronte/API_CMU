@@ -2,27 +2,31 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs-extra');
-const jwt = require('jsonwebtoken'); // Necesario para el token
+const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { pool } = require('./cola');
-
+const { iniciarDispatcher } = require('./dispatcher'); // IMPORTANTE: Importar el dispatcher aquí
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = 'clave_secreta_2026'; // Define esto aquí
+const JWT_SECRET = 'clave_secreta_2026';
 const screenshotsDir = path.join(__dirname, 'screenshots');
 
 fs.ensureDirSync(screenshotsDir);
 
-// Configuración básica
+// --- CABECERA CORREGIDA Y SEGURA ---
 app.use(cors({
-    origin: '*', // Permite peticiones desde cualquier lugar
+    origin: 'https://soymuybonita.com', // Dominio específico, no '*'
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
 }));
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/screenshots', express.static(screenshotsDir));
+
+// ... (resto de tu código de verifyToken y rutas)
 
 // --- ESTE MIDDLEWARE REEMPLAZA A TU "AUTH" DE SESIÓN ---
 const verifyToken = (req, res, next) => {
