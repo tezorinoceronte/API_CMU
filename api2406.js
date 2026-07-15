@@ -2,31 +2,34 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs-extra');
-const jwt = require('jsonwebtoken'); // Necesario para el token111
+const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { pool } = require('./cola');
 
-
 const app = express();
-const PORT = process.env.PORT || 3000;
-const JWT_SECRET = 'clave_secreta_2026'; // Define esto aquí
+const PORT = process.env.PORT || 10000;
+const JWT_SECRET = 'clave_secreta_2026';
 const screenshotsDir = path.join(__dirname, 'screenshots');
-
-const authRoutes = require('./login'); 
-app.use('/auth', authRoutes);
 
 fs.ensureDirSync(screenshotsDir);
 
-// Configuración básica
-app.use(cors({
-    origin: '*', // Permite peticiones desde cualquier lugar
-    credentials: true
-}));
+// 1. MIDDLEWARES PRIMERO
+app.use(cors({ origin: '*', credentials: true }));
+app.use(express.json()); // NECESARIO PARA LEER req.body
+app.use(express.urlencoded({ extended: true }));
 
-
-app.use(express.json());
+// 2. ARCHIVOS ESTÁTICOS DESPUÉS
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/screenshots', express.static(screenshotsDir));
+
+// 3. RUTAS AL FINAL (para que ya tengan acceso al req.body procesado)
+const authRoutes = require('./login'); 
+app.use('/auth', authRoutes);
+
+
+
+
+
 
 
 // --- ESTE MIDDLEWARE REEMPLAZA A TU "AUTH" DE SESIÓN ---
