@@ -20,9 +20,12 @@ app.use(cors({
     credentials: true
 }));
 
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/screenshots', express.static(screenshotsDir));
+const authRoutes = require('./login'); 
+app.use('/auth', authRoutes);
 
 // --- ESTE MIDDLEWARE REEMPLAZA A TU "AUTH" DE SESIÓN ---
 const verifyToken = (req, res, next) => {
