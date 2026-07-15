@@ -24,9 +24,9 @@
     </div>
 
 <script>
- const API_URL = 'http://localhost:3000';
+// CORRECCIÓN: API_URL vacío para que apunte al mismo servidor donde vive la página
+const API_URL = ''; 
 
-// FUNCIÓN LOGIN: La única que debe existir
 async function login() {
     const correo = document.getElementById('correo').value;
     const password = document.getElementById('password').value;
@@ -36,18 +36,17 @@ async function login() {
         const res = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ correo, password }) // Ya no necesita credentials: 'include'
+            body: JSON.stringify({ correo, password })
         });
 
         const data = await res.json();
 
-        if (data.success) {
-            // Guardamos el token en el navegador. Esto es persistente y no falla.
+        if (res.ok && data.token) { // Verificar que res.ok sea true y exista el token
             localStorage.setItem('token', data.token); 
-            console.log("✅ Autenticación exitosa. Token guardado.");
+            console.log("✅ Autenticación exitosa.");
             window.location.href = '/autorecarga.html';
         } else {
-            msg.innerText = data.message || "Error al iniciar sesión.";
+            msg.innerText = data.error || "Error al iniciar sesión.";
             msg.style.display = 'block';
         }
     } catch (error) {
@@ -57,18 +56,16 @@ async function login() {
     }
 }
 
-// FUNCIÓN LOGOUT: Ahora borra el token
 async function logout() {
     localStorage.removeItem('token');
     window.location.href = '/login.html';
 }
 
-// PARA CADA PÁGINA (monitoreo1.html, etc):
-// Pon esto al principio para proteger la ruta
+// CORRECCIÓN: Lógica de protección de rutas
 const token = localStorage.getItem('token');
-if (token) {
-    // Si ya tienes token, no necesitas hacer login otra vez, ve al monitor
-    window.location.href = '/login.html';
+// Si estás en login.html y YA tienes token, te manda directo al sistema
+if (token && window.location.pathname === '/login.html') {
+    window.location.href = '/autorecarga.html';
 }
 </script>
 </body>
