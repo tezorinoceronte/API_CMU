@@ -1,12 +1,20 @@
 const mysql = require('mysql2');
 
-const connection = mysql.createConnection({
-  host: process.env.DB_HOST,      // Aquí leerá la variable que pusiste en Render
-  user: process.env.DB_USER,      // Aquí leerá el usuario de Hospedando
-  password: process.env.DB_PASSWORD, // Aquí leerá tu contraseña
+// 1. CORRECCIÓN: Usar createPool para manejar múltiples conexiones eficientemente
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 3306
+  port: process.env.DB_PORT || 3306,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 });
+
+// Convertimos el pool a promesas para poder usar await
+const poolPromise = pool.promise();
+
 const { limpiarSesionesInactivas } = require('./logicaCMU');
 
 async function iniciarDispatcher() {
@@ -15,11 +23,14 @@ async function iniciarDispatcher() {
     const NUM_WORKERS = 10;
 
     while (true) {
+        let connection;
         try {
             await limpiarSesionesInactivas();
-            const connection = await pool.getConnection();
+            
+            // 2. CORRECCIÓN: Usar poolPromise para obtener la conexión
+            connection = await poolPromise.getConnection();
 
-            // 1. Obtener la carga actual de cada worker
+            // 1. Obtener la carga actual
             const [carga] = await connection.execute(
                 "SELECT worker_id, COUNT(*) as activas FROM cola_tareas WHERE estado IN ('PROCESANDO', 'PROCESANDO_ESIM') GROUP BY worker_id"
             );
@@ -29,8 +40,7 @@ async function iniciarDispatcher() {
                 return acc;
             }, {});
 
-            // 2. Buscar tareas pendientes o listas para ser retomadas
-            // CORRECCIÓN: Aquí incluimos 'PENDIENTE' y los estados iniciales de tus tareas específicas
+            // 2. Buscar tareas pendientes
             const [tareas] = await connection.execute(
                 `SELECT id FROM cola_tareas 
                  WHERE worker_id IS NULL 
@@ -57,9 +67,11 @@ async function iniciarDispatcher() {
                 }
                 if (!asignado) console.warn("⚠️ Todos los workers están al máximo de su capacidad.");
             }
-            connection.release();
         } catch (err) { 
             console.error("❌ Error en Dispatcher:", err); 
+        } finally {
+            // 3. CORRECCIÓN: Liberar siempre la conexión, ocurra error o no
+            if (connection) connection.release();
         }
         await new Promise(r => setTimeout(r, 2000));
     }
