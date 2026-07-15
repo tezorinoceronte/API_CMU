@@ -176,7 +176,7 @@ app.get('/api/verificar-estado/:id',  verifyToken, async (req, res) => {
         console.log("🔍 Consultando ID:", req.params.id);
         
         // Usamos una consulta simple para ver qué hay realmente en la base de datos
-        const [rows] = await pool.execute("SELECT estado, resultado FROM public.public.cola_tareas WHERE id = ?", [req.params.id]);
+        const [rows] = await pool.execute("SELECT estado, resultado FROM public.cola_tareas WHERE id = ?", [req.params.id]);
         
         if (rows.length > 0) {
             const registro = rows[0];
