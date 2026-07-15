@@ -16,7 +16,7 @@
         if (!token) {
             window.location.href = '/login.html';
         } else {
-            fetch('http://localhost:3000/api/check-session', {
+            fetch('/api/check-session', {
                 headers: { 'Authorization': 'Bearer ' + token }
             })
             .then(res => res.json())
