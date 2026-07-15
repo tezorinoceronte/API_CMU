@@ -42,7 +42,7 @@ const verifyToken = (req, res, next) => {
 app.post('/auth/login', async (req, res) => {
     const { correo, password } = req.body;
     try {
-        const [rows] = await pool.execute('SELECT * FROM usuarios_act_cmu WHERE correo = ?', [correo]);
+        const [rows] = await pool.execute('SELECT * FROM public.usuarios_act_cmu WHERE correo = ?', [correo]);
         const user = rows[0];
 
         if (!user || !(await bcrypt.compare(password, user.password_hash))) {
@@ -255,7 +255,7 @@ app.get('/api/procesos',  async (req, res) => {
         const [rows] = await pool.execute(`
             SELECT ct.*, u.nombre_completo 
             FROM public.cola_tareas ct 
-            LEFT JOIN usuarios_act_cmu u ON ct.user_id = u.id 
+            LEFT JOIN public.usuarios_act_cmu u ON ct.user_id = u.id 
             ORDER BY ct.id DESC LIMIT 50
         `);
         
