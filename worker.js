@@ -102,7 +102,7 @@ async function cicloWorker() {
         console.error(`❌ [Worker: ${WORKER_ID}] Error crítico en tarea ${tarea?.id || 'N/A'}:`, err.message);
         if (connection && tarea && tarea.id) {
             await connection.execute(
-                "UPDATE cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", 
+                "UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", 
                 [err.message.substring(0, 255), tarea.id]
             ).catch(e => console.error("❌ Falló el reporte a BD:", e));
         }
