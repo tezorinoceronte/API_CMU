@@ -3,8 +3,8 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { pool } = require('./cola');
+const JWT_SECRET = process.env.JWT_SECRET
 
-const JWT_SECRET = process.env.JWT_SECRET || 'clave_super_secreta_2026';
 
 router.post('/login', async (req, res) => {
     const { correo, password } = req.body;
