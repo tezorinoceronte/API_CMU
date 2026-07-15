@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs-extra');
-const jwt = require('jsonwebtoken'); // Necesario para el token11
+const jwt = require('jsonwebtoken'); // Necesario para el token111
 const bcrypt = require('bcrypt');
 const { pool } = require('./cola');
 
