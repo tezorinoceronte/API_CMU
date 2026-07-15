@@ -1,12 +1,18 @@
 const { Pool } = require('pg');
 
+// Configuración robusta para evitar el error de red
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  // Forzar IPv4 para evitar el error ENETUNREACH
+  family: 4, 
+  // Aumentar tiempos de espera para entornos en la nube
+  connectionTimeoutMillis: 15000,
+  idleTimeoutMillis: 30000,
+  max: 5 // Reducir conexiones simultáneas para evitar saturación
 });
-
 
 async function ejecutarQuery(sql, params = []) {
     const client = await pool.connect();
@@ -21,7 +27,7 @@ async function ejecutarQuery(sql, params = []) {
 const { limpiarSesionesInactivas } = require('./logicaCMU');
 
 async function iniciarDispatcher() {
-    console.log("🚀 Dispatcher conectado directamente a Supabase...");
+    console.log("🚀 Dispatcher iniciado y configurado para IPv4...");
     const MAX_CONCURRENTES_POR_WORKER = 3;
     const NUM_WORKERS = 10;
 
@@ -53,7 +59,6 @@ async function iniciarDispatcher() {
                         const ocupacion = mapaCarga[idWorker] || 0;
 
                         if (ocupacion < MAX_CONCURRENTES_POR_WORKER) {
-                            // AQUÍ ESTÁ EL CAMBIO PARA SEGURIDAD:
                             await ejecutarQuery(
                                 `UPDATE cola_tareas SET estado = 'ASIGNADO', worker_id = $1, fecha_actualizacion = NOW() WHERE id = $2`,
                                 [idWorker, tarea.id]
@@ -68,7 +73,9 @@ async function iniciarDispatcher() {
                 }
             }
         } catch (err) { 
-           console.error("❌ ERROR DETALLADO:", err.stack);
+            console.error("❌ ERROR DETALLADO:", err.message);
+            // Si el error es de conexión, pausamos un poco más para que la red respire
+            await new Promise(r => setTimeout(r, 5000));
         }
         await new Promise(r => setTimeout(r, 2000));
     }
