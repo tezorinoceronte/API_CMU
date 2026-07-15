@@ -8,7 +8,7 @@ const { pool } = require('./cola');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-const JWT_SECRET = 'clave_secreta_2026';
+const JWT_SECRET = process.env.JWT_SECRET
 const screenshotsDir = path.join(__dirname, 'screenshots');
 
 fs.ensureDirSync(screenshotsDir);
