@@ -2,7 +2,10 @@
 
 console.log(`📡 [WORKER] CONECTANDO WORKER ${process.env.WORKER_ID || 'WORKER_01'}...`);
 
-const { pool } = require('./cola');
+const pool = new Pool({
+  connectionString: process.env.SUPABASE_URL || "postgresql://postgres:Alfa781Alfa@db.srfsdnphgdwrqjggcwfc.supabase.co:6543/postgres",
+  ssl: { rejectUnauthorized: false }
+});
 const logica = require('./logicaCMU');
 
 const { 
