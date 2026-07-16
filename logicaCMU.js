@@ -37,39 +37,24 @@ const config = {
 
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
-    // Definición unificada de la ruta
-    const userDataDir = path.join(__dirname, 'tmp', 'sessions', String(userId));
+    const path = require('path');
+    const fs = require('fs');
 
-    // 1. LIMPIEZA DE SEGURIDAD (SingletonLock)
-    const lockFile = path.join(userDataDir, 'SingletonLock');
-    if (require('fs').existsSync(lockFile)) {
-        try {
-            require('fs').unlinkSync(lockFile);
-            console.log("🔓 Bloqueo 'SingletonLock' eliminado.");
-        } catch (e) {
-            console.log("⚠️ No se pudo borrar el bloqueo, pero intentaremos continuar.");
-        }
-    }
-    // CORRECCIÓN: Carpeta dinámica por cada intento de lanzamiento
-    // Esto evita el error "Browser is already running" al garantizar que cada sesión sea única
+    // 1. CARPETA ÚNICA DE SESIÓN (Definida una sola vez)
     const userDataDir = path.join(__dirname, 'tmp', 'sessions', `${userId}-${ahora}`);
 
-    // 2. VERIFICACIÓN DE SESIÓN EXISTENTE
-    // 2. VERIFICACIÓN DE SESIÓN EXISTENTE (Mantengo tu lógica original)
-    if (sesiones.has(userId)) {
-        const sesion = sesiones.get(userId);
-        const inactivo = (ahora - sesion.lastUsed) > TIEMPO_EXPIRACION;
-@@ -55,67 +46,59 @@ async function obtenerSesionCompleta(userId, url) {
+    // 2. LIMPIEZA DE SEGURIDAD (SingletonLock)
+    const lockFile = path.join(userDataDir, 'SingletonLock');
+    if (fs.existsSync(lockFile)) {
+        try {
+            fs.unlinkSync(lockFile);
+            console.log("🔓 Bloqueo 'SingletonLock' eliminado.");
+        } catch (e) {
+            console.log("⚠️ No se pudo borrar el bloqueo, intentaremos continuar.");
+        }
     }
 
     // 3. LANZAMIENTO DEL NAVEGADOR
-    console.log(`🚀 Lanzando nuevo navegador para: ${userId}`);
-    const launchArgs = ['--no-sandbox', '--start-maximized'];
-if (config.useProxy) {
-    // Esto le dice a Chrome: "Usa este proxy para todo"
-    launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
-}
-
     console.log(`🚀 Lanzando nuevo navegador único para: ${userId}`);
     
     const launchArgs = [
@@ -84,32 +69,16 @@ if (config.useProxy) {
         launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
     }
 
-const browser = await puppeteer.launch({
-    headless: "new",
-    args: [
-        '--no-sandbox',               // Obligatorio en contenedores
-        '--disable-setuid-sandbox',   // Seguridad adicional necesaria en Linux
-        '--disable-dev-shm-usage',    // CRUCIAL: evita que Render colapse por falta de memoria
-        '--disable-gpu',              // Evita problemas con drivers gráficos inexistentes
-        '--no-zygote',                // Mejora la estabilidad en entornos limitados
-        '--single-process'            // Úsalo solo si sigues teniendo errores de memoria
-    ],
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-    userDataDir: userDataDir
-});
-
-//--- ANTES DE SUBIRLO ONLINE
-//--- ANTES DE SUBIRLO ONLINE    const browser = await puppeteer.launch({ 
-//--- ANTES DE SUBIRLO ONLINE        headless: false, 
-//--- ANTES DE SUBIRLO ONLINE        args: launchArgs,
-//--- ANTES DE SUBIRLO ONLINE        userDataDir: userDataDir // Usamos la variable unificada
-//--- ANTES DE SUBIRLO ONLINE    });
     const browser = await puppeteer.launch({
         headless: "new",
         args: launchArgs,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-        userDataDir: userDataDir // Usamos la carpeta única generada arriba
+        // Usamos la variable de entorno o fallback a chromium
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
+        userDataDir: userDataDir 
     });
+
+    return browser;
+}
 
 async function manejarRecargas(tarea, connection) {
     console.log(`🔄 [Recarga][ID: ${tarea.id}] Iniciando proceso de recarga para número: ${tarea.numero} | Portal: ${tarea.portal}`);
