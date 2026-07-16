@@ -782,11 +782,11 @@ app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
 
 
 app.listen(PORT, () => {
-    console.log("................🔥🔥🔥    api2406js ON ...🔥");
-    console.log(`🚨.....................🚀 api2406.js LISTA EN PUERTO en http://localhost:${PORT}`);
+    console.log("................🔥🔥🔥    api2406js ON ...🔥 API  ✅");
+    console.log(`🚨.....................🚀 api2406.js LISTA EN PUERTO en http://localhost:${PORT} API  ✅`);
 });
 const { iniciarDispatcher } = require('./dispatcher'); // Ajusta la ruta a tu archivo
-const { iniciarWorker } = require('./worker');         // Ajusta la ruta a tu archivo
-
 iniciarDispatcher();
+
+const { iniciarWorker } = require('./worker');         // Ajusta la ruta a tu archivo
 iniciarWorker();
