@@ -80,6 +80,6 @@ async function iniciarDispatcher() {
         await new Promise(r => setTimeout(r, 2000));
     }
 }
-console.log(" 🚨 . . ..🚀 COMUNICATEC esta en orbita ... ...🚀");
-console.log(" 🚨 . . ..🚀 ATHANATOS MIKHAEL esta en orbita ... ...🚀");
-iniciarDispatcher();
+console.log(" 🚨 . . ..🚀 COMUNICATEC esta en orbita ... ...🚀  DISPATCHER  ✅");
+console.log(" 🚨 . . ..🚀 ATHANATOS MIKHAEL esta en orbita ... ...🚀DISPACHER ON  ✅");
+module.exports = { iniciarDispatcher };
