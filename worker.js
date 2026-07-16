@@ -1,3 +1,5 @@
+console.log(`📡 [WOKER] CONECTANDO WORKER `);
+
 const { pool } = require('./cola'); // Asegúrate que exporte el pool de 'pg'
 const logica = require('./logicaCMU');
 
@@ -107,4 +109,5 @@ async function iniciarWorker() {
     }
 }
 
+console.log(`📡 [WOKER] ON`);
 iniciarWorker();
