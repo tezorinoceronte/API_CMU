@@ -6,7 +6,7 @@ router.post('/login', async (req, res) => {
     const pool = new Pool({
         connectionString: process.env.SUPABASE_URL,
         ssl: { rejectUnauthorized: false },
-        family: 4
+        family: 6
     });
 
     try {
