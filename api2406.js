@@ -137,7 +137,7 @@ app.get('/monitoreo.html', verifyToken, (req, res) => {
 
 
 // --- 2. Aplicación en la ruta --- REVISADO PostgreSQL
-
+// aqui tambien esta validar force
 app.post('/api/solicitar-consulta', verifyToken, async (req, res) => {   
     const userId = req.user?.id; 
     const { numero, portal, tipo } = req.body;
@@ -211,7 +211,7 @@ app.get('/api/verificar-estado/:id', verifyToken, async (req, res) => {
 
             console.log("✅ Registro encontrado:", registro);
 
-            const estadoActual = registro.estado || 'PENDIENTE_PROCESAMIENTO';
+            const estadoActual = registro.estado || 'RECARGA_PENDIENTE_REGISTRO';
             let resultado = registro.resultado;
 
             if (estadoActual === 'COMPLETADO' && resultado) {
