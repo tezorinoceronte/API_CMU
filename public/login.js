@@ -15,38 +15,38 @@ const pool = new Pool({
     family: 4
 });
 
+const JWT_SECRET = process.env.JWT_SECRET || 'clave_super_secreta_2026';
+
 router.post('/login', async (req, res) => {
     const { correo, password } = req.body;
 
+    if (!correo || !password) {
+        return res.status(400).json({ success: false, message: "Datos incompletos" });
+    }
+
     try {
-        console.log("Intentando consulta directa con datos directos...");
-        const query = 'SELECT * FROM public.usuarios_act_cmu WHERE correo = $1';
-        const result = await pool.query(query, [correo]);
-        
-        if (result.rows.length === 0) {
-            return res.status(401).json({ success: false, message: "Usuario no encontrado" });
-        }
-
+        // Ejecutamos la consulta una sola vez
+        const result = await pool.query('SELECT * FROM public.usuarios_act_cmu WHERE correo = $1', [correo]);
         const user = result.rows[0];
-        
-        // Comparación de contraseña
-        const match = await bcrypt.compare(password, user.password_hash);
-        
-        if (!match) {
-            return res.status(401).json({ success: false, message: "Contraseña incorrecta" });
+
+        // Verificamos si existe y comparamos contraseña
+        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+            return res.status(401).json({ success: false, message: "Credenciales incorrectas" });
         }
 
-        // Token usando una clave fija para evitar depender de entorno
-        const token = jwt.sign({ id: user.id }, 'clave_super_secreta_2026', { expiresIn: '24h' });
-        
-        return res.json({ success: true, token });
+        // Generamos el token una sola vez
+        const token = jwt.sign(
+            { id: user.id, nombre: user.nombre_completo, rol: user.rol }, 
+            JWT_SECRET, 
+            { expiresIn: '24h' }
+        );
+
+        console.log("✅ [LOGIN] Usuario autenticado:", correo);
+        return res.json({ success: true, token: token });
 
     } catch (err) {
-        console.error("ERROR CRÍTICO:", err);
-        return res.status(500).json({ 
-            success: false, 
-            message: "Fallo real: " + err.message 
-        });
+        console.error("❌ ERROR EN LOGIN:", err);
+        return res.status(500).json({ success: false, message: "Error interno del servidor" });
     }
 });
 
