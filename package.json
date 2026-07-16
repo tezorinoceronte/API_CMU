@@ -15,6 +15,7 @@
     "express-session": "^1.19.0",
     "https-proxy-agent": "^9.1.0",
     "pg": "^8.11.0",
+    "dotenv": "^16.x.x",
     "jimp": "^0.22.12",
     "jsonwebtoken": "^9.0.3",
     "jsqr": "^1.4.0",
