@@ -1324,6 +1324,8 @@ async function manejarACT_FISICO(tarea, connection, estadoActual) {
         );
     }
 }
+
+
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
@@ -1495,8 +1497,8 @@ async function manejarQR_ACT(page, tarea, connection) {
 
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-
-async function manejarACT_FISICO_REINTENTO(tarea, connection) {
+               
+async function manejarACT_FISICA_REINTENTO(tarea, connection) {
     console.log(`🔄 [Manejador] Iniciando REINTENTO para ID: ${tarea.id} (Estado: ${tarea.estado})`);
     try {
         const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
