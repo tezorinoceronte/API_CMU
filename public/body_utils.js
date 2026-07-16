@@ -646,7 +646,7 @@ let ID_USUARIO_ACTUAL = null;
 
 async function cargarIdUsuario() {
     try {
-        const res = await fetch(`${API_URL}/auth/me`, { 
+        const res = await fetch(`${API_URL}api/auth/me`, { 
             headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
         });
         // Verificamos si la respuesta es realmente JSON antes de parsear
