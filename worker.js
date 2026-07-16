@@ -1,11 +1,20 @@
+const { Pool } = require('pg');
 
+// Configuración robusta para evitar el error de red1
+const pool = new Pool({
+  connectionString: process.env.SUPAABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  },
+  // Forzar IPv4 para evitar el error ENETUNREACH
+  family: 4, 
+  // Aumentar tiempos de espera para entornos en la nube
+  connectionTimeoutMillis: 15000,
+  idleTimeoutMillis: 30000,
+  max: 5 // Reducir conexiones simultáneas para evitar saturación
+});
 
 console.log(`📡 [WORKER] CONECTANDO WORKER ${process.env.WORKER_ID || 'WORKER_01'}...`);
-const { Pool } = require('pg'); 
-const pool = new Pool({
-  connectionString: process.env.SUPABASE_URL || "postgresql://postgres:Alfa781Alfa@db.srfsdnphgdwrqjggcwfc.supabase.co:6543/postgres",
-  ssl: { rejectUnauthorized: false }
-});
 const logica = require('./logicaCMU');
 
 const { 
