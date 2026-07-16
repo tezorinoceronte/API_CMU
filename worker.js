@@ -1,116 +1,107 @@
 
-console.log(`📡 [WOKER] CONECTANDO WORKER `);
 
-const { pool } = require('./cola'); // Asegúrate que exporte el pool de 'pg'
+console.log(`📡 [WORKER] CONECTANDO WORKER ${process.env.WORKER_ID || 'WORKER_01'}...`);
+
+const { pool } = require('./cola');
 const logica = require('./logicaCMU');
 
-const { 
-    manejarRecargas, manejarBiometricos, manejarACT_FISICO, manejarACT_ESIM, 
-    manejarACT_ESIM_REINTENTO, ejecutar_ACT_ESIM_EXITOSA_QR, manejarACT_FISICA_REINTENTO,
-    manejarQR, manejarQR_ACT, manejarToken, obtenerSesionCompleta, 
-    limpiarSesionesInactivas, manejarQR_SMS
+const { 
+    manejarRecargas, manejarBiometricos, manejarACT_FISICO, manejarACT_ESIM, 
+    manejarACT_ESIM_REINTENTO, ejecutar_ACT_ESIM_EXITOSA_QR, manejarACT_FISICA_REINTENTO,
+    manejarQR, manejarQR_ACT, manejarToken, obtenerSesionCompleta, 
+    limpiarSesionesInactivas, manejarQR_SMS
 } = logica;
 
 const WORKER_ID = process.env.WORKER_ID || 'WORKER_01';
 
 async function cicloWorker() {
-    let client;
-    let tarea;
-    try {
-        // Obtenemos el cliente del pool de forma segura
-        client = await pool.connect();
+    let client;
+    let tarea;
+    try {
+        // 1. Log de conexión a BD
+        client = await pool.connect();
+        // console.log(`💾 [DB] Conectado al pool de PostgreSQL`); // Descomenta si quieres verlo cada 2 segundos
 
-        const res = await client.query(
-            `SELECT * FROM public.cola_tareas 
-             WHERE worker_id = $1 
-             AND estado IN ('ASIGNADO', 'FALLO_TOKEN_ERROR2', 'PROCESANDO_ESIM', 'REINTENTAR_QR', 
-                            'ACT_ESIM_REINTENTAR', 'ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO', 'ACT_ESIM', 
-                            'ACT_FISICA', 'ACT_ESIM_EXITOSA_QR_1', 'VALIDANDO_TOKEN') 
-             LIMIT 1`, [WORKER_ID]
-        );
+        const res = await client.query(
+            `SELECT * FROM public.cola_tareas 
+             WHERE worker_id = $1 
+             AND estado IN ('ASIGNADO', 'FALLO_TOKEN_ERROR2', 'PROCESANDO_ESIM', 'REINTENTAR_QR', 
+                            'ACT_ESIM_REINTENTAR', 'ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO', 'ACT_ESIM', 
+                            'ACT_FISICA', 'ACT_ESIM_EXITOSA_QR_1', 'VALIDANDO_TOKEN') 
+             LIMIT 1`, [WORKER_ID]
+        );
 
-        // Si no hay tareas, simplemente salimos. El finally cerrará el cliente.
-        if (res.rows.length === 0) {
-            return;
-        }
+        if (res.rows.length === 0) return;
 
-        tarea = res.rows[0];
+        tarea = res.rows[0];
 
-        // Marcamos como procesando
-        if (tarea.estado !== 'VALIDANDO_TOKEN' && tarea.estado !== 'FALLO_TOKEN') {
-            await client.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['PROCESANDO', tarea.id]);
-        }
+        // 2. Log cuando toma la tarea
+        if (tarea.estado !== 'VALIDANDO_TOKEN' && tarea.estado !== 'FALLO_TOKEN') {
+            await client.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['PROCESANDO', tarea.id]);
+            console.log(`🚀 [Worker: ${WORKER_ID}] Tarea ${tarea.id} tomada. Estado cambiado de '${tarea.estado}' a 'PROCESANDO'`);
+        } else {
+            console.log(`🚀 [Worker: ${WORKER_ID}] Retomando tarea ${tarea.id} en estado '${tarea.estado}'`);
+        }
 
-        console.log(`🛠 [Worker: ${WORKER_ID}] Procesando tarea ${tarea.id} | Tipo: ${tarea.tipo_tarea} | Estado: ${tarea.estado}`);
-
-        // --- LÓGICA DE DELEGACIÓN ---
-        // IMPORTANTE: Ninguna de estas funciones debe llamar a client.release()
-        if (tarea.tipo_tarea === 'RECARGA') {
-            await manejarRecargas(tarea, client);
-        } 
-        else if (tarea.tipo_tarea === 'BIOMETRICOS') {
-            if (['VALIDANDO_TOKEN', 'FALLO_TOKEN'].includes(tarea.estado)) {
-                const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
-                const page = await obtenerSesionCompleta(tarea.user_id, url);
-                await manejarToken(page, tarea, client);
-            } 
-            else if (tarea.estado === 'REINTENTAR_QR') {
-                const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
-                const page = await obtenerSesionCompleta(tarea.user_id, url);
-                await manejarQR_SMS(page, tarea, client);
-            } 
-            else {
-                await manejarBiometricos(tarea, client);
-            }
-        }
-        else if (tarea.tipo_tarea === 'ACT_FISICA') {
-            if (['ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO'].includes(tarea.estado)) {
-                await manejarACT_FISICA_REINTENTO(tarea, client);
-            } else if (tarea.estado === 'ACT_ESIM_EXITOSA_QR_1') {
-                const page = await obtenerSesionCompleta(tarea.user_id, 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login');
-                await manejarQR_ACT(page, tarea, client);
-            } else {
-                await manejarACT_FISICO(tarea, client);
-            }
-        } 
-        else if (tarea.tipo_tarea === 'ACT_ESIM') {
-            if (tarea.estado === 'ACT_ESIM_EXITOSA_QR_1') {
-                const page = await obtenerSesionCompleta(tarea.user_id, 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login');
-                await manejarQR_ACT(page, tarea, client);
-            } else if (tarea.estado === 'ASIGNADO' || tarea.estado === 'ACT_ESIM') {
-                await manejarACT_ESIM(tarea, client);
-            } else if (['ACT_ESIM_REINTENTAR', 'ACT_ESIM_FALLO'].includes(tarea.estado)) {
-                await manejarACT_ESIM_REINTENTO(tarea, client);
-            } else if (tarea.estado === 'ACT_ESIM_EXITOSA_QR') {
-                await ejecutar_ACT_ESIM_EXITOSA_QR(null, tarea);
-            } else if (tarea.estado === 'ACT_ESIM_VINCULAR') {
-                await manejarQR(null, tarea, client); 
-            }
-        }
-    } catch (err) {
-        console.error(`❌ [Worker: ${WORKER_ID}] Error crítico en tarea ${tarea?.id || 'N/A'}:`, err.message);
-        console.error(`💗❤️‍🔥💕 [Worker: ${WORKER_ID}] No encuentro que hacer o hay error crítico en tarea ${tarea?.id || 'N/A'}:`, err.message);
-        if (client && tarea && tarea.id) {
-            await client.query(
-                "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
-                ['ERROR', err.message.substring(0, 255), tarea.id]
-            ).catch(e => console.error("❌ Falló el reporte a BD:", e));
-        }
-    } finally {
-        // ÚNICO LUGAR PARA LIBERAR: Aquí garantizamos que el cliente vuelva al pool
-        if (client) {
-            client.release();
-        }
-    }
+        // --- LÓGICA DE DELEGACIÓN ---
+        if (tarea.tipo_tarea === 'RECARGA') {
+            await manejarRecargas(tarea, client);
+        } else if (tarea.tipo_tarea === 'BIOMETRICOS') {
+            if (['VALIDANDO_TOKEN', 'FALLO_TOKEN'].includes(tarea.estado)) {
+                const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
+                const page = await obtenerSesionCompleta(tarea.user_id, url);
+                await manejarToken(page, tarea, client);
+            } else if (tarea.estado === 'REINTENTAR_QR') {
+                const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
+                const page = await obtenerSesionCompleta(tarea.user_id, url);
+                await manejarQR_SMS(page, tarea, client);
+            } else {
+                await manejarBiometricos(tarea, client);
+            }
+        } else if (tarea.tipo_tarea === 'ACT_FISICA') {
+            if (['ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO'].includes(tarea.estado)) {
+                await manejarACT_FISICA_REINTENTO(tarea, client);
+            } else if (tarea.estado === 'ACT_ESIM_EXITOSA_QR_1') {
+                const page = await obtenerSesionCompleta(tarea.user_id, 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login');
+                await manejarQR_ACT(page, tarea, client);
+            } else {
+                await manejarACT_FISICO(tarea, client);
+            }
+        } else if (tarea.tipo_tarea === 'ACT_ESIM') {
+            if (tarea.estado === 'ACT_ESIM_EXITOSA_QR_1') {
+                const page = await obtenerSesionCompleta(tarea.user_id, 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login');
+                await manejarQR_ACT(page, tarea, client);
+            } else if (tarea.estado === 'ASIGNADO' || tarea.estado === 'ACT_ESIM') {
+                await manejarACT_ESIM(tarea, client);
+            } else if (['ACT_ESIM_REINTENTAR', 'ACT_ESIM_FALLO'].includes(tarea.estado)) {
+                await manejarACT_ESIM_REINTENTO(tarea, client);
+            } else if (tarea.estado === 'ACT_ESIM_EXITOSA_QR') {
+                await ejecutar_ACT_ESIM_EXITOSA_QR(null, tarea);
+            } else if (tarea.estado === 'ACT_ESIM_VINCULAR') {
+                await manejarQR(null, tarea, client);
+            }
+        }
+    } catch (err) {
+        console.error(`❌ [Worker: ${WORKER_ID}] Error crítico en tarea ${tarea?.id || 'N/A'}:`, err.message);
+        if (client && tarea && tarea.id) {
+            await client.query(
+                "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+                ['ERROR', err.message.substring(0, 255), tarea.id]
+            ).catch(e => console.error("❌ Falló el reporte a BD:", e));
+        }
+    } finally {
+        if (client) client.release();
+    }
 }
 
 async function iniciarWorker() {
-    console.log(`✅ ${WORKER_ID} activo y esperando tareas...`);
-    while (true) {
-        await cicloWorker();
-        await new Promise(resolve => setTimeout(resolve, 2000));
-    }
+    console.log(`✅ ${WORKER_ID} activo y esperando tareas...`);
+    while (true) {
+        await cicloWorker();
+        await new Promise(resolve => setTimeout(resolve, 2000));
+    }
 }
+
 
 console.log(`📡 [WOKER] ON`);
 iniciarWorker();
