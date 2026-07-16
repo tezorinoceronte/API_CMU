@@ -13,7 +13,7 @@ const screenshotsDir = path.join(__dirname, 'screenshots');
 
 fs.ensureDirSync(screenshotsDir);
 
-// 1. MIDDLEWARES PRIMERO
+// 1. MIDDLEWARES PRIMERO1
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json()); // NECESARIO PARA LEER req.body
 app.use(express.urlencoded({ extended: true }));
