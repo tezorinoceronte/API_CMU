@@ -5,20 +5,19 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs-extra');
+const { Pool } = require('pg');
+const bcrypt = require('bcryptjs'); 
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
- const { Pool } = require('pg');
+
+// Datos de conexión directos
 const pool = new Pool({
-  connectionString: process.env.SUPABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  },
-  // Forzar IPv4 para evitar el error ENETUNREACH
-  family: 4, 
-  // Aumentar tiempos de espera para entornos en la nube
-  connectionTimeoutMillis: 15000,
-  idleTimeoutMillis: 30000,
-  max: 5 // Reducir conexiones simultáneas para evitar saturación
+    host: 'aws-0-us-east-1.pooler.supabase.com',
+    user: 'postgres.srfsdnphgdwrqjggcwfc',
+    password: 'TyZzGz0RsYJcMcqM', // Aquí pones tu contraseña tal cual
+    database: 'postgres',
+    port: 5432,
+    ssl: { rejectUnauthorized: false },
+    family: 4
 });
 console.log(`🔍 [DB] Intentando conectar a: ${process.env.SUPABASE_URL ? "-------API CONECTADA A DB" : "¡ERROR! URL NO ENCONTRADA"}`);
 
@@ -808,7 +807,7 @@ app.listen(PORT, () => {
     console.log("................🔥🔥🔥    api2406js ON ...🔥 API  ✅");
     console.log(`🚨.....................🚀 api2406.js LISTA EN PUERTO en http://localhost:${PORT} API  ✅`);
 });
-//const { iniciarDispatcher } = require('./dispatcher'); // Ajusta la ruta a tu archivo
+const { iniciarDispatcher } = require('./dispatcher'); // Ajusta la ruta a tu archivo
 iniciarDispatcher();
 
 //const { iniciarWorker } = require('./worker');         // Ajusta la ruta a tu archivo
