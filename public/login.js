@@ -2,39 +2,40 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { Pool } = require('pg');
-
-// Configuración robusta para evitar el error de red1
-const pool = new Pool({
-  connectionString: process.env.SUPABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  },
-  // Forzar IPv4 para evitar el error ENETUNREACH
-  family: 4, 
-  // Aumentar tiempos de espera para entornos en la nube
-  connectionTimeoutMillis: 15000,
-  idleTimeoutMillis: 30000,
-  max: 5 // Reducir conexiones simultáneas para evitar saturación
-});
-
-const JWT_SECRET = process.env.JWT_SECRET || 'clave_super_secreta_2026';
+const pool = require('./cola'); // IMPORTA EL POOL CENTRALIZADO
 
 router.post('/login', async (req, res) => {
-    try {
-        console.log("Intentando login para:", req.body.correo);
-        const { correo, password } = req.body;
-        
-        // Verifica si el pool está disponible
-        if (!pool) throw new Error("Pool de base de datos no inicializado");
+    const { correo, password } = req.body;
 
-        const query = 'SELECT * FROM public.usuarios_act_cmu WHERE correo = $1';
-        const result = await pool.query(query, [correo]);
+    if (!correo || !password) {
+        return res.status(400).json({ success: false, message: "Faltan datos" });
+    }
+
+    try {
+        // 1. Buscar usuario
+        const result = await pool.query('SELECT * FROM public.usuarios_act_cmu WHERE correo = $1', [correo]);
         
-        console.log("Resultado de DB obtenido:", result.rows.length);
-        // ... resto de tu lógica
+        if (result.rows.length === 0) {
+            return res.status(401).json({ success: false, message: "Usuario no encontrado" });
+        }
+
+        const user = result.rows[0];
+
+        // 2. Verificar contraseña
+        const match = await bcrypt.compare(password, user.password_hash);
+        if (!match) {
+            return res.status(401).json({ success: false, message: "Contraseña incorrecta" });
+        }
+
+        // 3. Generar token
+        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '24h' });
+        
+        res.json({ success: true, token });
+
     } catch (err) {
-        console.error("ERROR DETALLADO EN LOGIN:", err); // <-- ESTE ES EL LOG QUE DEBES BUSCAR EN RENDER
-        res.status(500).json({ success: false, message: "Error interno" });
+        console.error("LOG DE ERROR DETALLADO:", err);
+        res.status(500).json({ success: false, message: "Error interno, revisa logs" });
     }
 });
+
+module.exports = router;
