@@ -15,39 +15,47 @@ const pool = new Pool({
     family: 4
 });
 
+const JWT_SECRET = process.env.JWT_SECRET || 'clave_super_secreta_2026';
+
 router.post('/login', async (req, res) => {
     const { correo, password } = req.body;
 
+    if (!correo || !password) {
+        return res.status(400).json({ success: false, message: "Datos incompletos" });
+    }
+
     try {
-        console.log("Intentando consulta directa con datos directos...");
-        const query = 'SELECT * FROM public.usuarios_act_cmu WHERE correo = $1';
-        const result = await pool.query(query, [correo]);
+        const [rows] = await pool.execute('SELECT * FROM public.usuarios_act_cmu WHERE correo = ?', [correo]);
+        const user = rows[0];
+        // CORRECCIÓN 1: Usar .query en lugar de .execute
+        // CORRECCIÓN 2: Usar $1 en lugar de ?
+        const result = await pool.query('SELECT * FROM public.usuarios_act_cmu WHERE correo = $1', [correo]);
         
-        if (result.rows.length === 0) {
-            return res.status(401).json({ success: false, message: "Usuario no encontrado" });
-        }
-
+        // CORRECCIÓN 3: Extraer 'rows' del resultado de pg
         const user = result.rows[0];
-        
-        // Comparación de contraseña
-        const match = await bcrypt.compare(password, user.password_hash);
-        
-        if (!match) {
-            return res.status(401).json({ success: false, message: "Contraseña incorrecta" });
+
+        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+            return res.status(401).json({ success: false, message: "Credenciales incorrectas" });
         }
 
-        // Token usando una clave fija para evitar depender de entorno
-        const token = jwt.sign({ id: user.id }, 'clave_super_secreta_2026', { expiresIn: '24h' });
-        
-        return res.json({ success: true, token });
+        const token = jwt.sign({ id: user.id }, 'clave_secreta_2026', { expiresIn: '24h' });
+        res.json({ success: true, token: token }); 
+        const token = jwt.sign(
+            { id: user.id, nombre: user.nombre_completo, rol: user.rol }, 
+            JWT_SECRET, 
+            { expiresIn: '24h' }
+        );
+
+        console.log("✅ [LOGIN] Usuario autenticado, token generado.");
+        res.json({ success: true, token: token });
 
     } catch (err) {
-        console.error("ERROR CRÍTICO:", err);
-        return res.status(500).json({ 
-            success: false, 
-            message: "Fallo real: " + err.message 
-        });
+        console.error(err);
+        res.status(500).json({ success: false, message: "Error interno" });
+        console.error("❌ ERROR EN LOGIN:", err);
+        res.status(500).json({ success: false, message: "Error interno del servidor" });
     }
 });
 
 module.exports = router;
+
