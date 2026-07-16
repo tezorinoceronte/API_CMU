@@ -1,41 +1,41 @@
 const express = require('express');
 const router = express.Router();
+const { Pool } = require('pg'); // Se asegura de tener pg instalado
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
-// IMPORTA el pool desde tu archivo cola.js en lugar de crearlo aquí
-const pool = require('./cola');
+// Definimos la configuración directamente aquí
+const pool = new Pool({
+    connectionString: process.env.SUPABASE_URL,
+    ssl: { rejectUnauthorized: false },
+    family: 4
+});
+
 router.post('/login', async (req, res) => {
     const { correo, password } = req.body;
 
-    if (!correo || !password) {
-        return res.status(400).json({ success: false, message: "Faltan datos" });
-    }
-
     try {
-        // 1. Buscar usuario
-        const result = await pool.query('SELECT * FROM public.usuarios_act_cmu WHERE correo = $1', [correo]);
-        
-        if (result.rows.length === 0) {
-            return res.status(401).json({ success: false, message: "Usuario no encontrado" });
-        }
-
+        // Ejecución rústica y directa
+        const query = 'SELECT * FROM public.usuarios_act_cmu WHERE correo = $1';
+        const result = await pool.query(query, [correo]);
         const user = result.rows[0];
 
-        // 2. Verificar contraseña
-        const match = await bcrypt.compare(password, user.password_hash);
-        if (!match) {
-            return res.status(401).json({ success: false, message: "Contraseña incorrecta" });
+        if (!user) {
+            return res.status(401).json({ success: false, message: "Credenciales incorrectas" });
         }
 
-        // 3. Generar token
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '24h' });
+        const match = await bcrypt.compare(password, user.password_hash);
+        if (!match) {
+            return res.status(401).json({ success: false, message: "Credenciales incorrectas" });
+        }
+
+        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'clave_temporal', { expiresIn: '24h' });
         
-        res.json({ success: true, token });
+        return res.json({ success: true, token });
 
     } catch (err) {
-        console.error("LOG DE ERROR DETALLADO:", err);
-        res.status(500).json({ success: false, message: "Error interno, revisa logs" });
+        console.error("DEBUG RÚSTICO:", err);
+        return res.status(500).json({ success: false, message: "Error interno: " + err.message });
     }
 });
 
