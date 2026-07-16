@@ -785,3 +785,8 @@ app.listen(PORT, () => {
     console.log("................🔥🔥🔥    api2406js ON ...🔥");
     console.log(`🚨.....................🚀 api2406.js LISTA EN PUERTO en http://localhost:${PORT}`);
 });
+const { iniciarDispatcher } = require('./dispatcher'); // Ajusta la ruta a tu archivo
+const { iniciarWorker } = require('./worker');         // Ajusta la ruta a tu archivo
+
+iniciarDispatcher();
+iniciarWorker();
