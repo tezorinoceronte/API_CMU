@@ -1,18 +1,5 @@
-const { Pool } = require('pg');
 
-// Configuración robusta para evitar el error de red1
-const pool = new Pool({
-  connectionString: process.env.SUPABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  },
-  // Forzar IPv4 para evitar el error ENETUNREACH
-  family: 4, 
-  // Aumentar tiempos de espera para entornos en la nube
-  connectionTimeoutMillis: 15000,
-  idleTimeoutMillis: 30000,
-  max: 5 // Reducir conexiones simultáneas para evitar saturación
-});
+const { pool } = require('./cola');
 
 console.log(`📡 [WORKER] CONECTANDO WORKER ${process.env.WORKER_ID || 'WORKER_01'}...`);
 const logica = require('./logicaCMU');
@@ -28,11 +15,13 @@ console.log(`🔍 [DB] Intentando conectar a: ${process.env.DATABASE_URL ? "URL 
 const WORKER_ID = process.env.WORKER_ID || 'WORKER_01';
 
 console.log(`🔍 [DB] Intentando conectar a: ${process.env.DATABASE_URL ? "URL CONFIGURADA" : "¡ERROR! URL NO ENCONTRADA"}`);
+
+
 async function cicloWorker() {
     let client;
     let tarea;
     try {
-        // 1. Intento de conexión con diagnóstico profundo
+        // 1. Intento de conexión
         client = await pool.connect();
         
         const res = await client.query(
@@ -45,7 +34,7 @@ async function cicloWorker() {
         );
 
         if (res.rows.length === 0) {
-            client.release();
+            // Eliminado el client.release() de aquí para evitar conflictos con el finally
             return; // Salida silenciosa si no hay tareas
         }
 
@@ -97,25 +86,27 @@ async function cicloWorker() {
         }
 
     } catch (err) {
-        // DIAGNÓSTICO PROFUNDO: Solo se activa si algo sale mal
         console.error(`🚨 [Worker: ${WORKER_ID}] ERROR DETALLADO:`);
         console.error(`   Mensaje: ${err.message}`);
         console.error(`   Stack: ${err.stack}`);
         
-        // Reportamos error a BD solo si logramos obtener una tarea antes de fallar
-        if (tarea && tarea.id) {
-            await client.query(
-                "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
-                ['ERROR', err.message.substring(0, 255), tarea.id]
-            ).catch(e => console.error("❌ Falló el reporte de error a BD:", e.message));
+        if (client && tarea && tarea.id) {
+            try {
+                await client.query(
+                    "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+                    ['ERROR', err.message.substring(0, 255), tarea.id]
+                );
+            } catch (e) {
+                console.error("❌ Falló el reporte de error a BD:", e.message);
+            }
         }
     } finally {
-        if (client) client.release();
+        // La única forma de asegurar que no haya doble liberación
+        if (client) {
+            client.release();
+        }
     }
 }
-
-
-
 
 async function iniciarWorker() {
     console.log(`✅ ${WORKER_ID} activo y esperando tareas...`);
