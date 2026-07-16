@@ -1,6 +1,6 @@
-console.log(`📡 [WOKER] CONECTANDO WORKER `);
+console.log(`📡 [WORKER] CONECTANDO WORKER `);
 
-const { pool } = require('./cola'); // Asegúrate que exporte el pool de 'pg'
+const { pool } = require('./cola'); 
 const logica = require('./logicaCMU');
 
 const { 
@@ -16,8 +16,9 @@ async function cicloWorker() {
     let client;
     let tarea;
     try {
-        // Obtenemos el cliente del pool de forma segura
+        // Log para confirmar que intentamos conectar al pool
         client = await pool.connect();
+        console.log(`✅ [DB] Base de datos conectada exitosamente para tarea...`);
 
         const res = await client.query(
             `SELECT * FROM public.cola_tareas 
@@ -28,14 +29,13 @@ async function cicloWorker() {
              LIMIT 1`, [WORKER_ID]
         );
 
-        // Si no hay tareas, simplemente salimos. El finally cerrará el cliente.
         if (res.rows.length === 0) {
+            client.release(); // Liberamos si no hay nada
             return;
         }
 
         tarea = res.rows[0];
 
-        // Marcamos como procesando
         if (tarea.estado !== 'VALIDANDO_TOKEN' && tarea.estado !== 'FALLO_TOKEN') {
             await client.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['PROCESANDO', tarea.id]);
         }
@@ -43,7 +43,6 @@ async function cicloWorker() {
         console.log(`🛠 [Worker: ${WORKER_ID}] Procesando tarea ${tarea.id} | Tipo: ${tarea.tipo_tarea} | Estado: ${tarea.estado}`);
 
         // --- LÓGICA DE DELEGACIÓN ---
-        // IMPORTANTE: Ninguna de estas funciones debe llamar a client.release()
         if (tarea.tipo_tarea === 'RECARGA') {
             await manejarRecargas(tarea, client);
         } 
@@ -88,7 +87,6 @@ async function cicloWorker() {
         }
     } catch (err) {
         console.error(`❌ [Worker: ${WORKER_ID}] Error crítico en tarea ${tarea?.id || 'N/A'}:`, err.message);
-        console.error(`💗❤️‍🔥💕 [Worker: ${WORKER_ID}] No encuentro que hacer o hay error crítico en tarea ${tarea?.id || 'N/A'}:`, err.message);
         if (client && tarea && tarea.id) {
             await client.query(
                 "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
@@ -96,9 +94,9 @@ async function cicloWorker() {
             ).catch(e => console.error("❌ Falló el reporte a BD:", e));
         }
     } finally {
-        // ÚNICO LUGAR PARA LIBERAR: Aquí garantizamos que el cliente vuelva al pool
         if (client) {
             client.release();
+            console.log(`🔌 [DB] Conexión liberada correctamente.`);
         }
     }
 }
@@ -112,7 +110,12 @@ async function iniciarWorker() {
 }
 
 console.log(`📡 [WOKER] ON`);
+
 iniciarWorker();
-console.log(`..📡..................................📡............... [WOKER] ON✅`);
+
+console.log(`..📡..................................📡............... [WOKER] ON✅💗❤️‍🔥💕`);
+
 console.log(`..📡.....📡............................................ [WOKER] ON✅`);
-module.exports = { iniciarWorker };
+
+module.exports = { iniciarWorker }; 
+
