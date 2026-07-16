@@ -156,34 +156,46 @@ app.get('/monitoreo.html', verifyToken, (req, res) => {
 
 
 app.post('/api/solicitar-consulta', verifyToken, async (req, res) => {   
+    // Log para confirmar que la petición llegó a la ruta
+    console.log("🔍 [API] Solicitud recibida en /api/solicitar-consulta");
+    console.log("🔍 [API] Body recibido:", req.body);
+    console.log("🔍 [API] Usuario ID:", req.user?.id);
+
     const userId = req.user?.id; 
     const { numero, portal, tipo } = req.body;
 
+    // Validación básica
+    if (!numero || !userId) {
+        console.warn("⚠️ [API] Fallo: Datos incompletos");
+        return res.status(400).json({ error: "Datos incompletos (número o usuario faltante)" });
+    }
 
-            console.log("✅ Registro encontrado:", registro);
+    try {
+        console.log("🚀 [API] Intentando insertar en cola_tareas...");
 
-            const estadoActual = registro.estado || 'PENDIENTE';
-            let resultado = registro.resultado;
+        const query = `
+            INSERT INTO public.cola_tareas (user_id, numero, portal, estado, tipo_tarea) 
+            VALUES ($1, $2, $3, 'PENDIENTE', $4) 
+            RETURNING id
+        `;
+        const values = [userId, numero, portal || 'TELCEL', tipo || 'RECARGA'];
+        
+        const result = await pool.query(query, values);
+        const tareaId = result.rows[0].id;
 
-            if (estadoActual === 'COMPLETADO' && resultado) {
-                try { 
-                    resultado = typeof resultado === 'string' ? JSON.parse(resultado) : resultado; 
-                } catch (e) { 
-                    console.error("❌ Error al parsear JSON:", e); 
-                }
-            }
+        console.log("✅ [API] Tarea insertada correctamente. ID:", tareaId);
+        
+        res.json({ 
+            success: true, 
+            tareaId: tareaId, 
+            status: "Tarea creada" 
+        });
 
-            res.json({ estado: estadoActual, resultado: resultado });
-        } else {
-            console.warn("⚠️ No se encontró registro con ID:", req.params.id);
-            res.status(404).json({ error: "No encontrada" });
-        }
     } catch (error) {
-        console.error("❌ Error en servidor:", error);
-        res.status(500).json({ error: error.message });
+        console.error("❌ [API] Error crítico en INSERT:", error);
+        res.status(500).json({ error: "Error al crear la tarea en la base de datos" });
     }
 });
-
 
 //---------------------------------------------------------------------- > REVISADO PostgreSQL
 app.get('/api/estado-consolidado/:numero', verifyToken, async (req, res) => {
