@@ -18,9 +18,9 @@ async function cicloWorker() {
     let client;
     let tarea;
     try {
-        // 1. Log de conexión a BD
+        // 1. Log de conexión a BD - Se ejecuta cada ciclo
         client = await pool.connect();
-        // console.log(`💾 [DB] Conectado al pool de PostgreSQL`); // Descomenta si quieres verlo cada 2 segundos
+        console.log(`💾 [DB] Conectado al pool de PostgreSQL para Worker: ${WORKER_ID}`);
 
         const res = await client.query(
             `SELECT * FROM public.cola_tareas 
@@ -31,14 +31,18 @@ async function cicloWorker() {
              LIMIT 1`, [WORKER_ID]
         );
 
-        if (res.rows.length === 0) return;
+        if (res.rows.length === 0) {
+            // Sin tareas, liberamos conexión y salimos silenciosamente
+            client.release();
+            return;
+        }
 
         tarea = res.rows[0];
 
         // 2. Log cuando toma la tarea
         if (tarea.estado !== 'VALIDANDO_TOKEN' && tarea.estado !== 'FALLO_TOKEN') {
             await client.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['PROCESANDO', tarea.id]);
-            console.log(`🚀 [Worker: ${WORKER_ID}] Tarea ${tarea.id} tomada. Estado cambiado de '${tarea.estado}' a 'PROCESANDO'`);
+            console.log(`🚀 [Worker: ${WORKER_ID}] Tarea ${tarea.id} tomada. Estado: '${tarea.estado}' -> 'PROCESANDO'`);
         } else {
             console.log(`🚀 [Worker: ${WORKER_ID}] Retomando tarea ${tarea.id} en estado '${tarea.estado}'`);
         }
@@ -82,15 +86,22 @@ async function cicloWorker() {
             }
         }
     } catch (err) {
-        console.error(`❌ [Worker: ${WORKER_ID}] Error crítico en tarea ${tarea?.id || 'N/A'}:`, err.message);
-        if (client && tarea && tarea.id) {
+        // Log de error solo si algo falló realmente
+        console.error(`❌ [Worker: ${WORKER_ID}] Error en ciclo:`, err.message);
+        
+        // Solo intentamos actualizar BD si 'tarea' fue definida, evitando el error de referencia N/A
+        if (tarea && tarea.id) {
             await client.query(
                 "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
                 ['ERROR', err.message.substring(0, 255), tarea.id]
-            ).catch(e => console.error("❌ Falló el reporte a BD:", e));
+            ).catch(e => console.error("❌ Falló el reporte de error a BD:", e.message));
         }
     } finally {
-        if (client) client.release();
+        // Liberación segura del cliente al pool
+        if (client) {
+            client.release();
+            console.log(`🔌 [DB] Conexión liberada.`);
+        }
     }
 }
 
