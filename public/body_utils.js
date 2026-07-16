@@ -645,31 +645,22 @@ let ID_USUARIO_ACTUAL = null;
 //-- parte de validarforce
 
 async function cargarIdUsuario() {
-    if (promesaUsuario) return promesaUsuario;
-
-    promesaUsuario = (async () => {
-        const token = localStorage.getItem('token');
-        try {
-            const res = await fetch(`${API_URL}api/auth/me`, { 
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
-            
-            // Primero verificamos si la respuesta es OK
-            if (!res.ok) {
-                console.warn("No se pudo obtener el usuario. Código:", res.status);
-                return null; // O redirige al login aquí
-            }
-
+    try {
+        const res = await fetch(`${API_URL}/auth/me`, { 
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+        });
+        // Verificamos si la respuesta es realmente JSON antes de parsear
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
             const data = await res.json();
-            ID_USUARIO_ACTUAL = data.id;
-            return ID_USUARIO_ACTUAL;
-        } catch (e) {
-            console.error("Error al obtener ID:", e);
+            if (data.success) return data.id;
         }
-    })();
-    return promesaUsuario;
+        throw new Error("No es JSON");
+    } catch (e) {
+        console.error("Sesión inválida o error de red");
+        return null; // En lugar de redirigir bruscamente
+    }
 }
-
 cargarIdUsuario();
 
 function obtenerIdUsuario() {
