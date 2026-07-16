@@ -30,7 +30,7 @@ if (numInput && btnValidar) {
 
 // --- FUNCIÓN PRINCIPAL DE CONSULTA ---
 // --- FUNCIÓN PRINCIPAL DE CONSULTA (CON LOGS DE DEPURACIÓN) ---
-async function validarforce() {
+async function validarForce() {
     const input = document.getElementById('numInput');
     const btn = document.getElementById('btnValidar');
     const alertBox = document.getElementById('alertBox');
