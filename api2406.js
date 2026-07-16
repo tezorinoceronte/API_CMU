@@ -1,4 +1,3 @@
-console.log(".....🔥🔥🔥 Encendiendo motores en api2406js ... espere ...🔥");
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -780,6 +779,9 @@ app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
         });
     }
 });
-console.log(".....🔥🔥🔥 api2406js arranco ON ...🔥");
 
-app.listen(PORT, () => console.log(`🚨...🚀 api2406.js corriendo en http://localhost:${PORT}`));
+
+app.listen(PORT, () => {
+    console.log("................🔥🔥🔥    api2406js ON ...🔥");
+    console.log(`🚨.....................🚀 api2406.js LISTA EN PUERTO en http://localhost:${PORT}`);
+});
