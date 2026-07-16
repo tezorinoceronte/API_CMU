@@ -12,7 +12,10 @@ const {
     limpiarSesionesInactivas, manejarQR_SMS
 } = logica;
 
+console.log(`🔍 [DB] Intentando conectar a: ${process.env.DATABASE_URL ? "URL CONFIGURADA" : "¡ERROR! URL NO ENCONTRADA"}`);
 const WORKER_ID = process.env.WORKER_ID || 'WORKER_01';
+
+console.log(`🔍 [DB] Intentando conectar a: ${process.env.DATABASE_URL ? "URL CONFIGURADA" : "¡ERROR! URL NO ENCONTRADA"}`);
 async function cicloWorker() {
     let client;
     let tarea;
