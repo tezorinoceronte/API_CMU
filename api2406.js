@@ -136,55 +136,60 @@ app.get('/monitoreo.html', verifyToken, (req, res) => {
 
 
 
-// --- 2. Aplicación en la ruta ---
-// Fíjate que insertamos 'authMiddleware' como segundo argumento
+// --- 2. Aplicación en la ruta --- REVISADO PostgreSQL
 
 app.post('/api/solicitar-consulta', verifyToken, async (req, res) => {   
     const userId = req.user?.id; 
     const { numero, portal, tipo } = req.body;
 
-    // 1. VALIDACIÓN BÁSICA
     if (!numero || !userId) {
-        console.warn(`⚠️ [API] Intento de tarea fallido: Faltan datos. User: ${userId}, Numero: ${numero}`);
+        console.warn(`⚠️ [API] Intento de tarea fallido: Faltan datos.`);
         return res.status(400).json({ error: "Datos incompletos" });
     }
 
-    console.log(`🆕 [API] Usuario ${userId} solicita tarea: ${tipo || 'RECARGA'} para el número: ${numero}`);
-
     try {
-        const [result] = await pool.query(
-            `INSERT INTO public.cola_tareas (user_id, numero, portal, estado, tipo_tarea) VALUES (?, ?, ?, 'PENDIENTE', ?)`,
-            [userId, numero, portal || 'TELCEL', tipo || 'RECARGA']
-        );
+        // CORRECCIÓN: Usamos $1, $2... y agregamos RETURNING id para obtener el ID generado
+        const query = `
+            INSERT INTO public.cola_tareas (user_id, numero, portal, estado, tipo_tarea) 
+            VALUES ($1, $2, $3, 'PENDIENTE', $4) 
+            RETURNING id
+        `;
+        const values = [userId, numero, portal || 'TELCEL', tipo || 'RECARGA'];
+        
+        const result = await pool.query(query, values);
 
-        console.log(`✅ [API] Tarea creada exitosamente con ID: ${result.insertId}`);
-        res.json({ tareaId: result.insertId, status: "Tarea creada" });
+        // En pg, el ID está en result.rows[0].id
+        const tareaId = result.rows[0].id;
+
+        console.log(`✅ [API] Tarea creada exitosamente con ID: ${tareaId}`);
+        res.json({ tareaId: tareaId, status: "Tarea creada" });
 
     } catch (error) {
         console.error(`❌ [API] Error crítico al insertar tarea:`, error);
-        res.status(500).json({ error: "Error interno del servidor al crear tarea" });
+        res.status(500).json({ error: "Error interno del servidor" });
     }
 });
 
-
+//---------------------------------------------------------------------- > REVISADO PostgreSQL
 app.get('/api/estado-consolidado/:numero', verifyToken, async (req, res) => {
     try {
         const num = req.params.numero;
         const userId = req.user.id;
 
-        // QUITAMOS EL FILTRO DE 'COMPLETADO' PARA QUE EL VIGILANTE PUEDA VER EL PROCESO
-        const [rows] = await pool.query(`
+        // Corregido: Uso de $1, $2 y acceso a result.rows
+        const result = await pool.query(`
             SELECT * FROM public.cola_tareas 
-            WHERE numero = ? 
-            AND user_id = ? 
+            WHERE numero = $1 
+            AND user_id = $2 
             ORDER BY id DESC LIMIT 1
         `, [num, userId]);
+
+        const rows = result.rows;
 
         if (rows.length === 0) {
             return res.status(404).json({ success: false, message: "Tarea no encontrada." });
         }
 
-        // Devolvemos la tarea tal cual está (PENDIENTE, PROCESANDO, O COMPLETADO)
         res.json(rows[0]);
     } catch (err) {
         console.error("❌ Error en estado-consolidado:", err.message);
@@ -192,20 +197,20 @@ app.get('/api/estado-consolidado/:numero', verifyToken, async (req, res) => {
     }
 });
 
-app.get('/api/verificar-estado/:id',  verifyToken, async (req, res) => {
+
+//---------------------------------------------------------------------- > REVISADO PostgreSQL
+app.get('/api/verificar-estado/:id', verifyToken, async (req, res) => {
     try {
         console.log("🔍 Consultando ID:", req.params.id);
 
-        // Usamos una consulta simple para ver qué hay realmente en la base de datos
-        const [rows] = await pool.query("SELECT estado, resultado FROM public.cola_tareas WHERE id = ?", [req.params.id]);
+        // Corregido: Uso de $1 y acceso a result.rows
+        const result = await pool.query("SELECT estado, resultado FROM public.cola_tareas WHERE id = $1", [req.params.id]);
 
-        if (rows.length > 0) {
-            const registro = rows[0];
+        if (result.rows.length > 0) {
+            const registro = result.rows[0];
 
-            // Log para debuggear en tu terminal de VS Code
             console.log("✅ Registro encontrado:", registro);
 
-            // Si el estado está vacío o es null, le asignamos un valor por defecto para que el front no se rompa
             const estadoActual = registro.estado || 'PENDIENTE_PROCESAMIENTO';
             let resultado = registro.resultado;
 
@@ -227,8 +232,6 @@ app.get('/api/verificar-estado/:id',  verifyToken, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
-
 
 
 app.get('/api/obtener-resultado-final/:userId/:numero',  verifyToken,  async (req, res) => {
@@ -270,29 +273,24 @@ app.get('/api/obtener-resultado-final/:userId/:numero',  verifyToken,  async (re
 });
 
 
-
-app.get('/api/procesos',  async (req, res) => {
+app.get('/api/procesos', async (req, res) => {
     try {
-        const [rows] = await pool.query(`
+        // Corregido: Sin desestructuración, acceso a result.rows
+        const result = await pool.query(`
             SELECT ct.*, u.nombre_completo 
             FROM public.cola_tareas ct 
             LEFT JOIN public.usuarios_act_cmu u ON ct.user_id = u.id 
             ORDER BY ct.id DESC LIMIT 50
         `);
+        
+        const rows = result.rows; // Obtenemos las filas de result.rows
 
         let html = `
         <style>
             body { font-family: sans-serif; margin: 10px; }
             table { width: max-content; border-collapse: collapse; }
-            th { 
-                background: #000; color: #fff; padding: 5px; font-size: 13px; 
-                text-align: left; min-width: 150px; max-width: 150px;
-            }
-            td { 
-                border: 1px solid #ccc; padding: 4px; height: 15px; font-size: 13px; 
-                min-width: 150px; max-width: 150px; white-space: nowrap; 
-                overflow: hidden; text-overflow: ellipsis; 
-            }
+            th { background: #000; color: #fff; padding: 5px; font-size: 13px; text-align: left; min-width: 150px; max-width: 150px; }
+            td { border: 1px solid #ccc; padding: 4px; height: 15px; font-size: 13px; min-width: 150px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             tr:nth-child(even) { background: #f2f2f2; }
         </style>
         <h2>Monitoreo Completo (Ancho Fijo 150px)</h2>
@@ -335,7 +333,6 @@ app.get('/api/procesos',  async (req, res) => {
                     <td title="${r.estatus_act}">${r.estatus_act || '-'}</td>
                     <td title="${r.ESTADO_ACT}">${r.ESTADO_ACT || '-'}</td>
                     <td title="${r.fecha_actualizacion}">${r.fecha_actualizacion || '-'}</td>
-                    
                 </tr>
             `).join('')}
         </table>
@@ -347,67 +344,57 @@ app.get('/api/procesos',  async (req, res) => {
     }
 });
 
+//---------------------------------------------------------------------- > REVISADO PostgreSQL
 app.get('/api/ultimas-lineas', verifyToken, async (req, res) => {
     try {
         const userId = req.user.id; 
-        console.log("Consultando tareas para user_id:", userId); // <-- MIRA LA CONSOLA DEL SERVIDOR
-
-        const [rows] = await pool.query(`
+        
+        // Corregido: Uso de $1, $2 y acceso a result.rows
+        const result = await pool.query(`
             SELECT * FROM public.cola_tareas 
-            WHERE user_id = ? 
-            AND id IN (SELECT MAX(id) FROM public.cola_tareas WHERE user_id = ? GROUP BY numero)
+            WHERE user_id = $1 
+            AND id IN (SELECT MAX(id) FROM public.cola_tareas WHERE user_id = $2 GROUP BY numero)
             ORDER BY id DESC LIMIT 10
         `, [userId, userId]);
 
-        console.log("Registros encontrados:", rows.length); // <-- MIRA SI TRAE DATOS
+        const rows = result.rows;
+        console.log("Registros encontrados:", rows.length);
         res.json(rows);
     } catch (err) {
         console.error("Error en BD:", err);
         res.status(500).json({ error: "Error en BD" });
     }
 });
+//---------------------------------------------------------------------- > FIN REVISADO PostgreSQL
 
 
-app.get('/api/estado-actual2/:numero', verifyToken,  async (req, res) => {
-    try {
-        const query = `
-            SELECT * FROM public.cola_tareas 
-            WHERE numero = ? 
-            AND iccid IS NOT NULL 
-            AND created_at >= NOW() - INTERVAL 10 MINUTE
-            ORDER BY id DESC LIMIT 1`;
-
-        const [rows] = await pool.query(query, [req.params.numero]);
-
-        // Si no hay nada en los últimos 10 minutos, devolvemos un objeto vacío
-        res.json(rows.length > 0 ? rows[0] : {});
-    } catch (err) {
-        res.status(500).json({ error: "Error en la consulta" });
-    }
-});
-
-// Ruta para RECARGA y SIN REGISTRO LA QUE ME HIZO BORRAR
-app.post('/api/ejecutar-accion2', verifyToken,  async (req, res) => {
+//---------------------------------------------------------------------- >  REVISADO PostgreSQL
+app.post('/api/ejecutar-accion2', verifyToken, async (req, res) => {
     const { userId, numero, tipo } = req.body;
 
-    // Si el usuario presiona "RECARGA" (Botón automático)
-    if (tipo === 'RECARGA') {
-        const resultado = await hacerClicEnDatosLinea(page, numero, userId, tipo);
-        res.json({ status: 'success', data: resultado });
+    try {
+        // Si el usuario presiona "RECARGA" (Botón automático)
+        if (tipo === 'RECARGA') {
+            // Nota: Asegúrate de que 'page' esté disponible en el alcance
+            const resultado = await hacerClicEnDatosLinea(page, numero, userId, tipo);
+            res.json({ status: 'success', data: resultado });
+        } else if (tipo === 'REGISTRAR_BIOMETRICOS') {
+            // Lógica para manual
+            res.json({ status: 'info', message: 'Acción manual iniciada' });
+        } else {
+            res.status(400).json({ error: 'Tipo de acción no válido' });
+        }
+    } catch (error) {
+        console.error("❌ Error en ejecutar-accion2:", error);
+        res.status(500).json({ error: 'Error al ejecutar la acción' });
     }
-
-    // Si el usuario presiona "REGISTRAR BIOMÉTRICOS" (Manual)
-
 });
-
-// LLAMA A EJECUTAR ACCIONES TELCEL
-
+//---------------------------------------------------------------------- > FIN REVISADO PostgreSQL
 
 
 // -- ENVIAMOS Y RECIBIMOS EL TOKEN
-// -- ENVIAMOS Y RECIBIMOS EL TOKEN
-
-app.post('/api/enviar-token',  verifyToken, async (req, res) => {
+//---------------------------------------------------------------------- > REVISADO PostgreSQL
+app.post('/api/enviar-token', verifyToken, async (req, res) => {
     const { tareaId, token } = req.body;
 
     console.log(`📡 [API] Token recibido: "${token}" para Tarea ID: ${tareaId}`);
@@ -420,14 +407,12 @@ app.post('/api/enviar-token',  verifyToken, async (req, res) => {
     }
 
     try {
-        // Actualizamos el token y cambiamos el estado a 'VALIDANDO_TOKEN'
-        // Esto le indica al Dispatcher que la tarea ya tiene datos listos para ser procesados
-        const [result] = await pool.query(
-            "UPDATE public.cola_tareas SET token = ?, estado = 'VALIDANDO_TOKEN' WHERE id = ?", 
+        const result = await pool.query(
+            "UPDATE public.cola_tareas SET token = $1, estado = 'VALIDANDO_TOKEN' WHERE id = $2", 
             [token, tareaId]
         );
 
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) {
             return res.status(404).json({ status: 'error', message: 'Tarea no encontrada' });
         }
 
@@ -443,54 +428,52 @@ app.post('/api/enviar-token',  verifyToken, async (req, res) => {
             message: 'Error interno del servidor' 
         });
     }
+}); 
+
+
+
+    
+//---------------------------------------------------------------------- > REVISADO PostgreSQL
+app.post('/api/actualizar-token', verifyToken, async (req, res) => {
+const { tareaId, nuevoToken } = req.body;
+
+if (!tareaId || !nuevoToken) {
+    return res.status(400).json({ success: false, message: "Datos incompletos" });
+}
+
+try {
+    // En pg (node-postgres), pool.query gestiona automáticamente la conexión (no necesitas getConnection/release)
+    // Corregido: Uso de $1, $2 y sintaxis SQL PostgreSQL
+    await pool.query(
+        "UPDATE public.cola_tareas SET token = $1, estado = 'VALIDANDO_TOKEN', resultado = NULL WHERE id = $2",
+        [nuevoToken, tareaId]
+    );
+
+    res.json({ success: true, message: "Token actualizado correctamente" });
+} catch (err) {
+    console.error("❌ Error al actualizar token:", err);
+    res.status(500).json({ success: false, message: "Error al actualizar BD" });
+}
 });
-
-app.post('/api/actualizar-token', verifyToken,  async (req, res) => {
-    const { tareaId, nuevoToken } = req.body;
-
-    if (!tareaId || !nuevoToken) {
-        return res.status(400).json({ success: false, message: "Datos incompletos" });
-    }
-
-    const connection = await pool.getConnection();
-    try {
-        // 1. Guardamos el nuevo token
-        // 2. Cambiamos el estado a 'VALIDANDO_TOKEN' para que el Dispatcher lo procese
-        // 3. Limpiamos el 'resultado' (el error anterior) para empezar de cero
-        await connection.execute(
-            "UPDATE public.cola_tareas SET token = ?, estado = 'VALIDANDO_TOKEN', resultado = NULL WHERE id = ?",
-            [nuevoToken, tareaId]
-        );
-
-        res.json({ success: true, message: "Token actualizado correctamente" });
-    } catch (err) {
-        res.status(500).json({ success: false, message: "Error al actualizar BD" });
-    } finally {
-        connection.release();
-    }
-});
-
-
-// En tu archivo de rutas (ej: api.js)
 
 app.get('/api/estado-tarea/:tareaId', verifyToken, async (req, res) => {
     try {
         const { tareaId } = req.params;
         const userId = req.user.id;
 
-        // AGREGADO: Se incluyó 'link_final' y 'numero' en el SELECT
-        const [rows] = await pool.query(
-            "SELECT estado, resultado, numero, link_final FROM public.cola_tareas WHERE id = ? AND user_id = ?", 
+        // Corregido: Uso de $1, $2 y acceso a result.rows
+        const result = await pool.query(
+            "SELECT estado, resultado, numero, link_final FROM public.cola_tareas WHERE id = $1 AND user_id = $2", 
             [tareaId, userId]
         );
 
-        if (rows.length > 0) {
-            const tarea = rows[0];
+        if (result.rows.length > 0) {
+            const tarea = result.rows[0];
             res.json({
                 estado: tarea.estado,
                 resultado: tarea.resultado,
-                numero: tarea.numero,       // Ahora sí existe
-                link_final: tarea.link_final // Ahora sí existe
+                numero: tarea.numero,
+                link_final: tarea.link_final
             });
         } else {
             console.warn(`⚠️ Intento de acceso no autorizado. Usuario ${userId} intentó ver tarea ${tareaId}`);
@@ -502,45 +485,48 @@ app.get('/api/estado-tarea/:tareaId', verifyToken, async (req, res) => {
     }
 });
 
-// Ruta para BIOMETRICOS
 
-// En tu archivo de rutas (ej. app.js o routes.js)
+
+// ------------------------------------------------------------------------------------------------------> REVISADO PostgreSQL
+
 app.post('/api/reintentar', verifyToken, async (req, res) => {
-    const { tareaId } = req.body;
-    console.log(`📡 [Backend] Solicitud de REINTENTO recibida para ID: ${tareaId} por Usuario: ${req.user.id}`);
+const { tareaId } = req.body;
+console.log(📡 [Backend] Solicitud de REINTENTO recibida para ID: ${tareaId} por Usuario: ${req.user.id});
 
-    const connection = await pool.getConnection();
+try {
+    // En pg, usamos pool.query directamente (no necesitamos getConnection/release)
+    // Corregido: Uso de $1, $2 y acceso a rowCount
+    const result = await pool.query(
+        "UPDATE public.cola_tareas SET estado = 'REINTENTAR_QR', resultado = NULL WHERE id = $1 AND user_id = $2", 
+        [tareaId, req.user.id]
+    );
 
-    try {
-        const [result] = await connection.execute(
-            "UPDATE public.cola_tareas SET estado = 'REINTENTAR_QR', resultado = NULL WHERE id = ? AND user_id = ?", 
-            [tareaId, req.user.id] // Agregué el user_id por seguridad
-        );
-
-        if (result.affectedRows > 0) {
-            console.log(`✅ [Backend] Base de datos actualizada: Estado cambiado a REINTENTAR_QR para ID: ${tareaId}`);
-            res.json({ success: true, message: "Reintento activado" });
-        } else {
-            console.warn(`⚠️ [Backend] No se actualizó ninguna fila. ¿El ID es correcto o pertenece al usuario? ID: ${tareaId}`);
-            res.status(404).json({ success: false, message: "Tarea no encontrada" });
-        }
-    } catch (err) {
-        console.error(`❌ [Backend] Error grave al actualizar BD para ID ${tareaId}:`, err);
-        res.status(500).json({ success: false, error: "Error interno" });
-    } finally {
-        connection.release();
+    // En pg, el número de filas afectadas se obtiene mediante result.rowCount
+    if (result.rowCount > 0) {
+        console.log(`✅ [Backend] Base de datos actualizada: Estado cambiado a REINTENTAR_QR para ID: ${tareaId}`);
+        res.json({ success: true, message: "Reintento activado" });
+    } else {
+        console.warn(`⚠️ [Backend] No se actualizó ninguna fila. ID: ${tareaId}`);
+        res.status(404).json({ success: false, message: "Tarea no encontrada o sin permisos" });
     }
+} catch (err) {
+    console.error(`❌ [Backend] Error grave al actualizar BD para ID ${tareaId}:`, err);
+    res.status(500).json({ success: false, error: "Error interno" });
+}
 });
+//---------------------------------------------------------------------- > fin REVISADO PostgreSQL
+
+
+
 
 //-- ACTIVACION FISICA - ESIM CORREJIDO 
 
+//---------------------------------------------------------------------- > REVISADO PostgreSQL
 
 app.post('/api/solicitar-activacion', verifyToken, async (req, res) => {
     // 1. OBTENEMOS EL ID DESDE EL TOKEN JWT
-    // El middleware 'verifyToken' debe haber guardado los datos en 'req.user'
     const userId = req.user ? req.user.id : null; 
 
-    // Si no hay ID en el token, rechazamos la petición
     if (!userId) {
         console.warn("⚠️ Intento de activación sin token válido.");
         return res.status(401).json({ success: false, message: "Sesión no válida o expirada" });
@@ -551,37 +537,49 @@ app.post('/api/solicitar-activacion', verifyToken, async (req, res) => {
 
     try {
         // 2. INSERTAMOS USANDO EL userId OBTENIDO DEL JWT
-        const [result] = await pool.query(
-            `INSERT INTO public.cola_tareas (tipo_tarea, user_id, portal, ciudad, ciudad_id, iccid, imei, correo, estado) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [tipo_tarea, userId, portal || 'TELCEL', ciudad, ciudad_id, iccid, imei, correo, estadoInicial]
-        );
+        // Corregido: Uso de $1-$9 y RETURNING id para obtener el ID generado
+        const query = `
+            INSERT INTO public.cola_tareas 
+            (tipo_tarea, user_id, portal, ciudad, ciudad_id, iccid, imei, correo, estado) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id
+        `;
+        const values = [tipo_tarea, userId, portal || 'TELCEL', ciudad, ciudad_id, iccid, imei, correo, estadoInicial];
+        
+        const result = await pool.query(query, values);
 
-        console.log(`✅ Tarea creada con ID: ${result.insertId} para el usuario: ${userId}`);
-        res.json({ success: true, id: result.insertId }); 
+        // En PostgreSQL, obtenemos el ID desde result.rows[0].id
+        const nuevoId = result.rows[0].id;
+
+        console.log(`✅ Tarea creada con ID: ${nuevoId} para el usuario: ${userId}`);
+        res.json({ success: true, id: nuevoId }); 
 
     } catch (err) {
         console.error("❌ Error al insertar en BD:", err);
         res.status(500).json({ success: false, error: "Error interno del servidor" });
     }
-});
+}); 
+
 
 // Ruta para reintento de Paso 9 (Extracción) REVISADA
+
+//---------------------------------------------------------------------- > REVISADO PostgreSQL
 
 app.post('/api/recuperacion-paso-nueve/:tareaId', verifyToken, async (req, res) => {
     const { tareaId } = req.params;
 
     try {
-        // CORRECCIÓN: Filtramos por ID Y por el ID del usuario del token
-        const [result] = await pool.query(
+        // Corregido: Uso de $1, $2 y acceso a result.rowCount
+        const result = await pool.query(
             `UPDATE public.cola_tareas 
              SET estado = 'ACT_ESIM_REINTENTAR', 
                  resultado = NULL 
-             WHERE id = ? AND user_id = ?`, // <--- SEGURIDAD AÑADIDA
-            [tareaId, req.user.id] // <--- USAMOS EL ID DEL TOKEN
+             WHERE id = $1 AND user_id = $2`, 
+            [tareaId, req.user.id]
         );
 
-        if (result.affectedRows === 0) {
+        // En pg, usamos rowCount para verificar si se actualizó el registro
+        if (result.rowCount === 0) {
             // Si retorna 0 filas, o no existe, o no le pertenece al usuario
             return res.status(403).json({ error: "Tarea no encontrada o no tienes permiso." });
         }
@@ -595,26 +593,26 @@ app.post('/api/recuperacion-paso-nueve/:tareaId', verifyToken, async (req, res) 
 
 
 
-// Asegúrate de que esta ruta existe en tu servidor
-// Ruta corregida: ahora usa 'pool' en lugar de 'connection'
+//---------------------------------------------------------------------- > REVISADO PostgreSQL
+
 app.get('/api/estado-tarea-ACT/:id', verifyToken, async (req, res) => {
     // Log para depuración inmediata
     console.log(`[API] Ejecutando: /api/estado-tarea-ACT/:id | ID Tarea: ${req.params.id} | Usuario Token: ${req.user.id}`);
 
     try {
-        // CORRECCIÓN: Se agregaron 'linea_registrada' y 'fecha_recarga' al SELECT
-        const [rows] = await pool.query(
+        // Corregido: Uso de $1 y acceso a result.rows
+        const result = await pool.query(
             `SELECT estado, resultado, estatus_act, numero, correo, folio_act, iccid, link_final, imei, user_id, 
                     linea_registrada, fecha_recarga 
-             FROM public.cola_tareas WHERE id = ?`, 
+             FROM public.cola_tareas WHERE id = $1`, 
             [req.params.id]
         );
 
-        if (rows.length === 0) {
+        if (result.rows.length === 0) {
             return res.status(404).json({ error: "Tarea no encontrada" });
         }
 
-        const tarea = rows[0];
+        const tarea = result.rows[0];
 
         // 2. VALIDACIÓN ESTRICTA: 
         const idTareaEnBD = Number(tarea.user_id);
@@ -635,21 +633,24 @@ app.get('/api/estado-tarea-ACT/:id', verifyToken, async (req, res) => {
     }
 });
 
+
+
+
 //-- VER QR ESIM
-// Asegúrate de que esto coincida con lo que usas en el resto del archivo
+//---------------------------------------------------------------------- > REVISADO PostgreSQL
 
 app.post('/api/ejecutar-qr-registro/:tareaId', verifyToken, async (req, res) => {
     const { tareaId } = req.params;
 
     try {
         // 1. VALIDACIÓN DE PROPIEDAD: 
-        // Verificamos que la tarea exista Y pertenezca al usuario del token (req.user.id)
-        const [rows] = await pool.query(
-            "SELECT id FROM public.cola_tareas WHERE id = ? AND user_id = ?", 
+        // Corregido: Uso de $1, $2 y result.rows
+        const resultCheck = await pool.query(
+            "SELECT id FROM public.cola_tareas WHERE id = $1 AND user_id = $2", 
             [tareaId, req.user.id]
         );
 
-        if (rows.length === 0) {
+        if (resultCheck.rows.length === 0) {
             return res.status(403).json({ 
                 success: false, 
                 error: "Tarea no encontrada o no tienes permiso para modificarla." 
@@ -657,9 +658,9 @@ app.post('/api/ejecutar-qr-registro/:tareaId', verifyToken, async (req, res) => 
         }
 
         // 2. ACTUALIZACIÓN SEGURA:
-        // Aseguramos que el UPDATE solo afecte si el user_id coincide
-        const [result] = await pool.query(
-            "UPDATE public.cola_tareas SET estado = 'ACT_ESIM_EXITOSA_QR', fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?", 
+        // Corregido: Uso de $1, $2 y result.rowCount
+        const resultUpdate = await pool.query(
+            "UPDATE public.cola_tareas SET estado = 'ACT_ESIM_EXITOSA_QR', fecha_actualizacion = NOW() WHERE id = $1 AND user_id = $2", 
             [tareaId, req.user.id]
         );
 
@@ -672,57 +673,63 @@ app.post('/api/ejecutar-qr-registro/:tareaId', verifyToken, async (req, res) => 
     }
 });
 
-//-------------------------------- REVISADAS LAS DOS
 
+
+//---------------------------------------------------------------------- > REVISADO PostgreSQL
 app.post('/api/vincular-biometricos-act/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     try {
-        // ACTUALIZACIÓN SEGURA: Filtramos por ID Y user_id
-        const [result] = await pool.query(
-            "UPDATE public.cola_tareas SET estado = 'ACT_ESIM_VINCULAR' WHERE id = ? AND user_id = ?", 
+        // Corregido: Uso de $1, $2 y result.rowCount
+        const result = await pool.query(
+            "UPDATE public.cola_tareas SET estado = 'ACT_ESIM_VINCULAR' WHERE id = $1 AND user_id = $2", 
             [id, req.user.id]
         );
 
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) {
             return res.status(403).json({ success: false, error: "Tarea no encontrada o no autorizada" });
         }
 
         res.json({ success: true });
     } catch (err) {
+        console.error("❌ Error en vincular-biometricos-act:", err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
+//---------------------------------------------------------------------- > REVISADO PostgreSQL
 app.get('/api/obtener-resultado-vincular/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     try {
-        // FILTRO DE SEGURIDAD: Añadimos AND user_id = ?
-        const [rows] = await pool.query(
-            "SELECT estado, resultado, numero, correo, imei, folio_act FROM public.cola_tareas WHERE id = ? AND user_id = ?",
+        // Corregido: Uso de $1, $2 y result.rows
+        const result = await pool.query(
+            "SELECT estado, resultado, numero, correo, imei, folio_act FROM public.cola_tareas WHERE id = $1 AND user_id = $2",
             [id, req.user.id]
         );
 
-        if (rows.length > 0) {
+        if (result.rows.length > 0) {
+            const tarea = result.rows[0];
             res.json({ 
-                estado: rows[0].estado, 
-                resultado: rows[0].resultado,
-                numero: rows[0].numero,
-                correo: rows[0].correo,
-                imei: rows[0].imei,
-                folio_act: rows[0].folio_act
+                estado: tarea.estado, 
+                resultado: tarea.resultado,
+                numero: tarea.numero,
+                correo: tarea.correo,
+                imei: tarea.imei,
+                folio_act: tarea.folio_act
             });
         } else {
-            // Devolvemos 404 si no existe o 403 si no pertenece al usuario
             res.status(404).json({ error: "Tarea no encontrada o acceso denegado" });
         }
     } catch (error) {
+        console.error("❌ Error en obtener-resultado-vincular:", error);
         res.status(500).json({ error: error.message });
     }
 });
 
 
 // FISICA 
+//---------------------------------------------------------------------- > REVISADO PostgreSQL
 
+JavaScript
 app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
     const { id, nuevo_estado } = req.body;
     const estadoLimpio = String(nuevo_estado || '').trim().toUpperCase();
@@ -736,13 +743,13 @@ app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
 
     try {
         // 1. VALIDACIÓN DE PROPIEDAD: 
-        // Verificamos que la tarea exista Y pertenezca al usuario del token (req.user.id)
-        const [rows] = await pool.query(
-            "SELECT id FROM public.cola_tareas WHERE id = ? AND user_id = ?", 
+        // Corregido: Uso de $1, $2 y acceso a result.rows
+        const resultCheck = await pool.query(
+            "SELECT id FROM public.cola_tareas WHERE id = $1 AND user_id = $2", 
             [id, req.user.id]
         );
 
-        if (rows.length === 0) {
+        if (resultCheck.rows.length === 0) {
             return res.status(403).json({ 
                 success: false, 
                 error: "Tarea no encontrada o no tienes permiso para modificarla." 
@@ -750,9 +757,9 @@ app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
         }
 
         // 2. ACTUALIZACIÓN SEGURA: 
-        // Filtramos por ID y user_id para garantizar que nadie modifique lo ajeno
-        const [result] = await pool.query(
-            "UPDATE public.cola_tareas SET estado = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?", 
+        // Corregido: Uso de $1, $2, $3
+        await pool.query(
+            "UPDATE public.cola_tareas SET estado = $1, fecha_actualizacion = NOW() WHERE id = $2 AND user_id = $3", 
             [estadoLimpio, id, req.user.id]
         );
 
@@ -764,13 +771,8 @@ app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
     } catch (err) {
         console.error("❌ ERROR CRÍTICO EN SQL:", err.message);
 
-        if (err.errno === 1265 || err.errno === 1366) {
-            return res.status(400).json({ 
-                success: false, 
-                error: "Valor de estado inválido." 
-            });
-        }
-
+        // En PostgreSQL los errores de tipo 'invalid input value' suelen tener código '22P02'
+        // Puedes ajustar esta lógica según tus necesidades de validación
         res.status(500).json({ 
             success: false, 
             error: "Error interno del servidor." 
