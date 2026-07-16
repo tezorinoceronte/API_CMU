@@ -11,12 +11,14 @@ const {
 } = logica;
 
 const WORKER_ID = process.env.WORKER_ID || 'WORKER_01';
+
 async function cicloWorker() {
     let client;
     let tarea;
     try {
+        // Obtenemos el cliente del pool de forma segura
         client = await pool.connect();
-        
+
         const res = await client.query(
             `SELECT * FROM public.cola_tareas 
              WHERE worker_id = $1 
@@ -26,31 +28,41 @@ async function cicloWorker() {
              LIMIT 1`, [WORKER_ID]
         );
 
-        if (res.rows.length === 0) return;
+        // Si no hay tareas, simplemente salimos. El finally cerrará el cliente.
+        if (res.rows.length === 0) {
+            return;
+        }
 
         tarea = res.rows[0];
-        
+
+        // Marcamos como procesando
         if (tarea.estado !== 'VALIDANDO_TOKEN' && tarea.estado !== 'FALLO_TOKEN') {
-            await client.query("UPDATE public.cola_tareas SET estado = $1, fecha_actualizacion = NOW() WHERE id = $2", ['PROCESANDO', tarea.id]);
+            await client.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['PROCESANDO', tarea.id]);
         }
-        
+
         console.log(`🛠 [Worker: ${WORKER_ID}] Procesando tarea ${tarea.id} | Tipo: ${tarea.tipo_tarea} | Estado: ${tarea.estado}`);
 
+        // --- LÓGICA DE DELEGACIÓN ---
+        // IMPORTANTE: Ninguna de estas funciones debe llamar a client.release()
         if (tarea.tipo_tarea === 'RECARGA') {
             await manejarRecargas(tarea, client);
-        } else if (tarea.tipo_tarea === 'BIOMETRICOS') {
+        } 
+        else if (tarea.tipo_tarea === 'BIOMETRICOS') {
             if (['VALIDANDO_TOKEN', 'FALLO_TOKEN'].includes(tarea.estado)) {
                 const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
                 const page = await obtenerSesionCompleta(tarea.user_id, url);
                 await manejarToken(page, tarea, client);
-            } else if (tarea.estado === 'REINTENTAR_QR') {
+            } 
+            else if (tarea.estado === 'REINTENTAR_QR') {
                 const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
                 const page = await obtenerSesionCompleta(tarea.user_id, url);
                 await manejarQR_SMS(page, tarea, client);
-            } else {
+            } 
+            else {
                 await manejarBiometricos(tarea, client);
             }
-        } else if (tarea.tipo_tarea === 'ACT_FISICA') {
+        }
+        else if (tarea.tipo_tarea === 'ACT_FISICA') {
             if (['ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO'].includes(tarea.estado)) {
                 await manejarACT_FISICA_REINTENTO(tarea, client);
             } else if (tarea.estado === 'ACT_ESIM_EXITOSA_QR_1') {
@@ -59,7 +71,8 @@ async function cicloWorker() {
             } else {
                 await manejarACT_FISICO(tarea, client);
             }
-        } else if (tarea.tipo_tarea === 'ACT_ESIM') {
+        } 
+        else if (tarea.tipo_tarea === 'ACT_ESIM') {
             if (tarea.estado === 'ACT_ESIM_EXITOSA_QR_1') {
                 const page = await obtenerSesionCompleta(tarea.user_id, 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login');
                 await manejarQR_ACT(page, tarea, client);
@@ -74,21 +87,24 @@ async function cicloWorker() {
             }
         }
     } catch (err) {
-        console.error(`❌ [Worker: ${WORKER_ID}] Error crítico en tarea ID ${tarea?.id || 'N/A'}:`, err);
+        console.error(`❌ [Worker: ${WORKER_ID}] Error crítico en tarea ${tarea?.id || 'N/A'}:`, err.message);
+        console.error(`💗❤️‍🔥💕 [Worker: ${WORKER_ID}] No encuentro que hacer o hay error crítico en tarea ${tarea?.id || 'N/A'}:`, err.message);
         if (client && tarea && tarea.id) {
-            // CORREGIDO: 3 parámetros exactos para las 3 columnas principales
             await client.query(
-                "UPDATE public.cola_tareas SET estado = $1, resultado = $2, fecha_actualizacion = NOW() WHERE id = $3", 
+                "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
                 ['ERROR', err.message.substring(0, 255), tarea.id]
             ).catch(e => console.error("❌ Falló el reporte a BD:", e));
         }
     } finally {
-        if (client) client.release();
+        // ÚNICO LUGAR PARA LIBERAR: Aquí garantizamos que el cliente vuelva al pool
+        if (client) {
+            client.release();
+        }
     }
 }
-     
+
 async function iniciarWorker() {
-    console.log(` ${WORKER_ID} ...............................✅activo y esperando tareas......................................✅`);
+    console.log(`✅ ${WORKER_ID} activo y esperando tareas...`);
     while (true) {
         await cicloWorker();
         await new Promise(resolve => setTimeout(resolve, 2000));
