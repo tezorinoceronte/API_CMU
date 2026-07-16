@@ -1,4 +1,5 @@
 console.log(`📡... Este es un mensaje a AthanosMK`);
+
 const fs = require('fs-extra');
 const path = require('path');
 const Jimp = require('jimp');
@@ -62,15 +63,19 @@ if (config.useProxy) {
 }
 
 
-const browser = await puppeteer.launch({ 
-        headless: "new", // "new" es necesario para servidores Linux
-        args: [
-            ...launchArgs, // Mantiene los argumentos que ya tenías
-            '--disable-dev-shm-usage', // ESTO ES CLAVE EN RENDER: evita errores de memoria
-            '--no-sandbox'             // Necesario para Docker/Render
-        ],
-        userDataDir: userDataDir
-    });
+const browser = await puppeteer.launch({
+    headless: "new",
+    args: [
+        '--no-sandbox',               // Obligatorio en contenedores
+        '--disable-setuid-sandbox',   // Seguridad adicional necesaria en Linux
+        '--disable-dev-shm-usage',    // CRUCIAL: evita que Render colapse por falta de memoria
+        '--disable-gpu',              // Evita problemas con drivers gráficos inexistentes
+        '--no-zygote',                // Mejora la estabilidad en entornos limitados
+        '--single-process'            // Úsalo solo si sigues teniendo errores de memoria
+    ],
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    userDataDir: userDataDir
+});
 
 //--- ANTES DE SUBIRLO ONLINE
 //--- ANTES DE SUBIRLO ONLINE    const browser = await puppeteer.launch({ 
