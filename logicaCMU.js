@@ -925,6 +925,77 @@ async function manejarToken(page, tarea, client) {
 }
 
 
+async function inyectarTokenYValidar(page, tareaId, numero) {
+    console.log(`🔑 [TOKEN][ID: ${tareaId}] Iniciando inyección de token para número: ${numero}...`);
+
+    try {
+        // 1. Obtener token fresco (Sintaxis PG)
+        const res = await pool.query("SELECT token FROM public.cola_tareas WHERE id = $1", [tareaId]);
+        const token = res.rows[0]?.token;
+
+        if (!token) {
+            console.warn(`⚠️ [TOKEN][ID: ${tareaId}] Token no encontrado en BD.`);
+            return { error: "Token no encontrado en BD." };
+        }
+
+        const selectorToken = 'input[id*="token"]';
+        const selectorBoton = '#formRegistro\\:j_id_2y';
+
+        // 2. Limpiar input e inyectar valor
+        console.log(`⌨️ [TOKEN][ID: ${tareaId}] Inyectando token en el formulario...`);
+        await page.evaluate((sel, val) => {
+            const input = document.querySelector(sel);
+            if (input) {
+                input.value = ""; 
+                input.value = val;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                input.dispatchEvent(new Event('blur', { bubbles: true }));
+            }
+        }, selectorToken, token);
+
+        // 3. Clic al botón
+        console.log(`🖱️ [TOKEN][ID: ${tareaId}] Clic en botón de validar...`);
+        await page.click(selectorBoton);
+        
+        console.log(`⏳ [TOKEN][ID: ${tareaId}] Esperando respuesta de validación...`);
+        await new Promise(r => setTimeout(r, 5000));
+
+        // 4. Verificar error en pantalla
+        const mensajeError = await page.evaluate(() => {
+            const el = document.querySelector('span[style*="color: red"]');
+            return el ? el.innerText.trim() : null;
+        });
+
+        if (mensajeError) {
+            console.error(`❌ [TOKEN][ID: ${tareaId}] Error detectado: ${mensajeError}`);
+            
+            // Limpiar token en BD (Sintaxis PG)
+            await pool.query("UPDATE public.cola_tareas SET token = NULL WHERE id = $1", [tareaId]);
+            
+            return { error: mensajeError };
+        }
+        
+        console.log(`✅ [TOKEN][ID: ${tareaId}] Token validado exitosamente.`);
+        return { success: true };
+
+    } catch (error) {
+        console.error(`🚨 [TOKEN][ID: ${tareaId}] Error crítico en inyección:`, error.message);
+        
+        // Reportar error grave a la BD
+        await pool.query(
+            "UPDATE public.cola_tareas SET estado = 'ERROR', resultado = $1 WHERE id = $2", 
+            [error.message.substring(0, 255), tareaId]
+        );
+        
+        throw error;
+    }
+}
+
+
+
+
+
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
