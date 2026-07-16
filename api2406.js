@@ -203,26 +203,34 @@ app.get('/api/verificar-estado/:id', verifyToken, async (req, res) => {
     try {
         console.log("🔍 Consultando ID:", req.params.id);
 
-        // Corregido: Uso de $1 y acceso a result.rows
-        const result = await pool.query("SELECT estado, resultado FROM public.cola_tareas WHERE id = $1", [req.params.id]);
+        const result = await pool.query(
+            "SELECT estado, resultado FROM public.cola_tareas WHERE id = $1", 
+            [req.params.id]
+        );
 
         if (result.rows.length > 0) {
             const registro = result.rows[0];
-
-            console.log("✅ Registro encontrado:", registro);
-
-            const estadoActual = registro.estado || 'RECARGA_PENDIENTE_REGISTRO';
+            const estadoActual = registro.estado;
             let resultado = registro.resultado;
 
-            if (estadoActual === 'COMPLETADO' && resultado) {
-                try { 
-                    resultado = typeof resultado === 'string' ? JSON.parse(resultado) : resultado; 
-                } catch (e) { 
-                    console.error("❌ Error al parsear JSON:", e); 
+            // Intentamos parsear siempre, ya que el resultado puede ser un JSON guardado como string
+            if (resultado && typeof resultado === 'string') {
+                try {
+                    resultado = JSON.parse(resultado);
+                } catch (e) {
+                    console.warn("⚠️ Resultado no es un JSON válido, se enviará como texto plano.");
                 }
             }
 
-            res.json({ estado: estadoActual, resultado: resultado });
+            console.log("✅ Registro encontrado:", { estado: estadoActual, resultado });
+
+            // Enviamos respuesta consistente. 
+            // Si el estado es RECARGA_PENDIENTE_REGISTRO, el frontend ya recibirá el 'resultado'
+            res.json({ 
+                estado: estadoActual, 
+                resultado: resultado 
+            });
+
         } else {
             console.warn("⚠️ No se encontró registro con ID:", req.params.id);
             res.status(404).json({ error: "No encontrada" });
@@ -232,7 +240,6 @@ app.get('/api/verificar-estado/:id', verifyToken, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
 
 app.get('/api/obtener-resultado-final/:userId/:numero',  verifyToken,  async (req, res) => {
     try {
