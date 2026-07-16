@@ -158,7 +158,7 @@ app.get('/monitoreo.html', verifyToken, (req, res) => {
 app.post('/api/solicitar-consulta', verifyToken, async (req, res) => {   
     const userId = req.user?.id; 
     const { numero, portal, tipo } = req.body;
-@@ -211,70 +211,70 @@
+
 
             console.log("✅ Registro encontrado:", registro);
 
@@ -215,6 +215,7 @@ app.get('/api/estado-consolidado/:numero', verifyToken, async (req, res) => {
 
 
 //---------------------------------------------------------------------- > REVISADO PostgreSQL
+
 app.get('/api/verificar-estado/:id', verifyToken, async (req, res) => {
     try {
         console.log("🔍 Consultando ID:", req.params.id);
