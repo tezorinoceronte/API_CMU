@@ -21,37 +21,20 @@ const pool = new Pool({
 const JWT_SECRET = process.env.JWT_SECRET || 'clave_super_secreta_2026';
 
 router.post('/login', async (req, res) => {
-    const { correo, password } = req.body;
-
-    if (!correo || !password) {
-        return res.status(400).json({ success: false, message: "Datos incompletos" });
-    }
-
     try {
-        // CORRECCIÓN 1: Usar .query en lugar de .execute1
-        // CORRECCIÓN 2: Usar $1 en lugar de ?
-        const result = await pool.query('SELECT * FROM public.usuarios_act_cmu WHERE correo = $1', [correo]);
+        console.log("Intentando login para:", req.body.correo);
+        const { correo, password } = req.body;
         
-        // CORRECCIÓN 3: Extraer 'rows' del resultado de pg
-        const user = result.rows[0];
+        // Verifica si el pool está disponible
+        if (!pool) throw new Error("Pool de base de datos no inicializado");
 
-        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-            return res.status(401).json({ success: false, message: "Credenciales incorrectas" });
-        }
-
-        const token = jwt.sign(
-            { id: user.id, nombre: user.nombre_completo, rol: user.rol }, 
-            JWT_SECRET, 
-            { expiresIn: '24h' }
-        );
-
-        console.log("✅ [LOGIN] Usuario autenticado, token generado.");
-        res.json({ success: true, token: token });
-
+        const query = 'SELECT * FROM public.usuarios_act_cmu WHERE correo = $1';
+        const result = await pool.query(query, [correo]);
+        
+        console.log("Resultado de DB obtenido:", result.rows.length);
+        // ... resto de tu lógica
     } catch (err) {
-        console.error("❌ ERROR EN LOGIN:", err);
-        res.status(500).json({ success: false, message: "Error interno del servidor" });
+        console.error("ERROR DETALLADO EN LOGIN:", err); // <-- ESTE ES EL LOG QUE DEBES BUSCAR EN RENDER
+        res.status(500).json({ success: false, message: "Error interno" });
     }
 });
-
-module.exports = router;
