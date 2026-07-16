@@ -1,10 +1,8 @@
 // Nuevo contenido de cola.js
-const { Pool } = require('pg');
-
 const pool = new Pool({
   connectionString: process.env.SUPABASE_URL,
   ssl: { rejectUnauthorized: false },
-  family: 4
+  // Fuerza a usar IPv4
+  host: 'db.srfsdnphgdwrqjggcwfc.supabase.co', // Asegúrate de extraer solo el host aquí
+  family: 4 
 });
-
-module.exports = { pool };
