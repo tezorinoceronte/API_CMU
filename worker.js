@@ -11,7 +11,6 @@ const {
 } = logica;
 
 const WORKER_ID = process.env.WORKER_ID || 'WORKER_01';
-
 async function cicloWorker() {
     let client;
     let tarea;
@@ -75,7 +74,7 @@ async function cicloWorker() {
             }
         }
     } catch (err) {
-        console.error(`💗❤️‍🔥💕 💗❤️‍🔥💕 💗❤️‍🔥💕 💗❤️‍🔥💕 [Worker: ${WORKER_ID}] Error crítico en tarea ID ${tarea?.id || 'N/A'}:`, err);
+        console.error(`❌ [Worker: ${WORKER_ID}] Error crítico en tarea ID ${tarea?.id || 'N/A'}:`, err);
         if (client && tarea && tarea.id) {
             // CORREGIDO: 3 parámetros exactos para las 3 columnas principales
             await client.query(
