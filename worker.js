@@ -1,22 +1,8 @@
-console.log(`📡 [WOKER] CONECTANDO WORKER `);
-
-const { pool } = require('./cola'); // Asegúrate que exporte el pool de 'pg'
-const logica = require('./logicaCMU');
-
-const { 
-    manejarRecargas, manejarBiometricos, manejarACT_FISICO, manejarACT_ESIM, 
-    manejarACT_ESIM_REINTENTO, ejecutar_ACT_ESIM_EXITOSA_QR, manejarACT_FISICA_REINTENTO,
-    manejarQR, manejarQR_ACT, manejarToken, obtenerSesionCompleta, 
-    limpiarSesionesInactivas, manejarQR_SMS
-} = logica;
-
-const WORKER_ID = process.env.WORKER_ID || 'WORKER_01';
-
 async function cicloWorker() {
     let client;
     let tarea;
     try {
-        // CORRECCIÓN PG: Obtención de cliente del pool
+        // Obtenemos el cliente del pool de forma segura
         client = await pool.connect();
         
         const res = await client.query(
@@ -28,14 +14,14 @@ async function cicloWorker() {
              LIMIT 1`, [WORKER_ID]
         );
 
+        // Si no hay tareas, simplemente salimos. El finally cerrará el cliente.
         if (res.rows.length === 0) {
-            client.release();
             return;
         }
 
         tarea = res.rows[0];
         
-        // Solo marcamos como PROCESANDO si no está en espera de interacción
+        // Marcamos como procesando
         if (tarea.estado !== 'VALIDANDO_TOKEN' && tarea.estado !== 'FALLO_TOKEN') {
             await client.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['PROCESANDO', tarea.id]);
         }
@@ -43,6 +29,7 @@ async function cicloWorker() {
         console.log(`🛠 [Worker: ${WORKER_ID}] Procesando tarea ${tarea.id} | Tipo: ${tarea.tipo_tarea} | Estado: ${tarea.estado}`);
 
         // --- LÓGICA DE DELEGACIÓN ---
+        // IMPORTANTE: Ninguna de estas funciones debe llamar a client.release()
         if (tarea.tipo_tarea === 'RECARGA') {
             await manejarRecargas(tarea, client);
         } 
@@ -80,7 +67,7 @@ async function cicloWorker() {
             } else if (['ACT_ESIM_REINTENTAR', 'ACT_ESIM_FALLO'].includes(tarea.estado)) {
                 await manejarACT_ESIM_REINTENTO(tarea, client);
             } else if (tarea.estado === 'ACT_ESIM_EXITOSA_QR') {
-                await ejecutar_ACT_ESIM_EXITOSA_QR(null, tarea); // Asegúrate de ajustar los parámetros según tu logicaCMU
+                await ejecutar_ACT_ESIM_EXITOSA_QR(null, tarea);
             } else if (tarea.estado === 'ACT_ESIM_VINCULAR') {
                 await manejarQR(null, tarea, client); 
             }
@@ -94,20 +81,9 @@ async function cicloWorker() {
             ).catch(e => console.error("❌ Falló el reporte a BD:", e));
         }
     } finally {
-        if (client) client.release();
+        // ÚNICO LUGAR PARA LIBERAR: Aquí garantizamos que el cliente vuelva al pool
+        if (client) {
+            client.release();
+        }
     }
 }
-
-console.log("🚀 Sistema de limpieza de sesiones iniciado.");
-setInterval(limpiarSesionesInactivas, 4 * 60 * 1000);
-
-async function iniciarWorker() {
-    console.log(`✅ ${WORKER_ID} activo y esperando tareas...`);
-    while (true) {
-        await cicloWorker();
-        await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-}
-console.log(`..📡..................................📡............... [WOKER] ON✅`);
-console.log(`..📡.....📡............................................ [WOKER] ON✅`);
-module.exports = { iniciarWorker };
