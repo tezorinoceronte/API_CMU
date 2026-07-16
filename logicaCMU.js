@@ -110,7 +110,6 @@ if (config.useProxy && config.proxyConfig.user) {
     sesiones.set(userId, { browser, pageForce, lastUsed: ahora });
     return pageForce;
 }
-
 async function manejarRecargas(tarea, connection) {
     try {
         const url = (tarea.portal === 'FORCE') ? 'https://force.mmoviles.com/login' : 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
@@ -120,34 +119,48 @@ async function manejarRecargas(tarea, connection) {
             if (!fecha || fecha === 'No Info') return null;
             const partes = fecha.split('-');
             if (partes.length !== 3) return null;
+            // PostgreSQL espera formato YYYY-MM-DD
             return `${partes[2]}-${partes[1]}-${partes[0]}`;
         };
 
         if (tarea.portal === 'FORCE') {
-            // AHORA PASAMOS tarea.id PARA QUE LA BD NO EXPLOTE
             const resultado = await validarForce(page, tarea.numero, tarea.user_id, tarea.id);
             const nuevoEstado = (resultado && resultado.tipo === 'COMPLETADO') ? 'COMPLETADO' : 'RECARGA_PENDIENTE_REGISTRO';
             
-            await connection.execute(`
+            // CORRECCIÓN: Uso de $1..$7 y connection.query
+            await connection.query(`
                 UPDATE public.reas 
-                SET estado = ?, iccid = ?, linea_registrada = ?, fecha_recarga = ?, primer_evento = ?, resultado = ? 
-                WHERE id = ?`, 
-                [nuevoEstado, resultado.iccid || null, resultado.registrado || null, formatearFecha(resultado.fechaActivacion), resultado.primerEvento || null, JSON.stringify(resultado), tarea.id]
+                SET estado = $1, iccid = $2, linea_registrada = $3, fecha_recarga = $4, primer_evento = $5, resultado = $6 
+                WHERE id = $7`, 
+                [
+                    nuevoEstado, 
+                    resultado.iccid || null, 
+                    resultado.registrado || null, 
+                    formatearFecha(resultado.fechaActivacion), 
+                    resultado.primerEvento || null, 
+                    JSON.stringify(resultado), 
+                    tarea.id
+                ]
             );
         } else {
             // ... lógica de Telcel ...
             await ejecutarLoginTelcel(page, tarea.user_id);
             const resultado = await hacerClicEnDatosLinea(page, tarea.user_id, tarea.numero);
-            await connection.execute(`
-                UPDATE public.reas SET estado = 'COMPLETADO', resultado = ? WHERE id = ?`, 
+            
+            // CORRECCIÓN: Uso de $1, $2 y connection.query
+            await connection.query(`
+                UPDATE public.reas SET estado = 'COMPLETADO', resultado = $1 WHERE id = $2`, 
                 [JSON.stringify(resultado), tarea.id]
             );
         }
     } catch (e) {
         console.error("❌ Error grave en manejarRecargas:", e);
-        // Garantizamos que el id exista antes de actualizar
         if (tarea && tarea.id) {
-            await connection.execute("UPDATE public.reas SET estado = 'ERROR', resultado = ? WHERE id = ?", [e.message, tarea.id]);
+            // CORRECCIÓN: Uso de $1, $2 y connection.query
+            await connection.query(
+                "UPDATE public.reas SET estado = 'ERROR', resultado = $1 WHERE id = $2", 
+                [e.message, tarea.id]
+            );
         }
     }
 }
@@ -217,7 +230,7 @@ async function validarForce(page, numero, userId, tareaId) {
 
 
 // 1. HERRAMIENTA TELCEL (Requiere Login)
-
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 async function ejecutarLoginTelcel(page, userId, tarea, connection) {
     console.log(`🔍 [Bot] Verificando estado de sesión para: ${userId}...`);
 
@@ -255,11 +268,11 @@ async function ejecutarLoginTelcel(page, userId, tarea, connection) {
     } catch (e) {
         console.error(`❌ [ERROR CRÍTICO] Fallo en Login para usuario ${userId}:`, e.message);
 
-        // Actualizamos la base de datos para marcar la tarea como ERROR
+        // CORRECCIÓN PostgreSQL: Uso de $1, $2 y .query()
         if (connection && tarea) {
-            await connection.execute(
-                "UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", 
-                [e.message.substring(0, 255), tarea.id]
+            await connection.query(
+                "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+                ['ERROR', e.message.substring(0, 255), tarea.id]
             );
         }
         
@@ -267,6 +280,9 @@ async function ejecutarLoginTelcel(page, userId, tarea, connection) {
         throw e; 
     }
 }
+//-------------------------------------------------------------->> FIN REVISADO PostgreSQL
+
+
 
 // 2. HERRAMIENTA FORCE (Acceso Libre/Sesión)
 
@@ -280,11 +296,14 @@ async function accederForce(page) {
 
 // LOGICA 
 
+//-------------------------------------------------------------->> REVISADO PostgreSQL
+
+JavaScript
 async function manejarBiometricos(tarea, connection) {
     console.log(`🚨 [Manejador] REGISTRANDO BIOMETRICOS: ${tarea.id} | Número: ${tarea.numero}`);
     
     try {
-        const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
+        const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribidores/app/login';
         const page = await obtenerSesionCompleta(tarea.user_id, url);
         
         await ejecutarLoginTelcel(page, tarea.user_id, tarea, connection);
@@ -297,21 +316,30 @@ async function manejarBiometricos(tarea, connection) {
         }
     } catch (e) {
         console.error(`❌ [Manejador] ERROR EN TAREA ${tarea.id}:`, e.message);
-        await connection.execute("UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", [e.message.substring(0, 255), tarea.id]);
+        
+        // CORRECCIÓN PostgreSQL: Uso de $1, $2 y .query()
+        await connection.query(
+            "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+            ['ERROR', e.message.substring(0, 255), tarea.id]
+        );
     }
 }
+//-------------------------------------------------------------->> FIN REVISADO PostgreSQL
 
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
-
+JavaScript
 async function manejarBiometricos2(tarea, connection, estadoActual) {
     try {
-
+        // Aseguramos que la URL esté definida
+        const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
 
         if (estadoActual === 'CONSULTA_ICCID') {
             const page = await obtenerSesionCompleta(tarea.user_id, url);
             const res = await registrarLinea(page, tarea.numero, tarea.user_id, tarea.id);
             if (res?.requiereToken) {
-                await connection.execute("UPDATE public.cola_tareas SET estado = 'ESPERANDO_USER' WHERE id = ?", [tarea.id]);
+                // CORRECCIÓN PostgreSQL: Uso de $1
+                await connection.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['ESPERANDO_USER', tarea.id]);
             }
             return;
         }
@@ -329,22 +357,22 @@ async function manejarBiometricos2(tarea, connection, estadoActual) {
         }
 
     } catch (err) {
-        console.error("Error crítico en manejarBiometricos:", err);
-        await connection.execute("UPDATE public.cola_tareas SET estado = 'FALLO_TOKEN', resultado = ? WHERE id = ?", [err.message, tarea.id]);
+        console.error("Error crítico en manejarBiometricos2:", err);
+        // CORRECCIÓN PostgreSQL: Uso de $1, $2
+        await connection.query(
+            "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+            ['FALLO_TOKEN', err.message, tarea.id]
+        );
     }
 }
-
-
-
-
-//----------------
-
-
-//-------
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
 
 
 // -- ACTIVAR SIM ESIM --
+//-------------------------------------------------------------->> REVISADO PostgreSQL
+
+JavaScript
 async function manejarACT_ESIM(tarea, connection) {
     console.log(`🛠 [Manejador] Iniciando activación NUEVA para tarea ID: ${tarea.id}`);
     try {
@@ -362,9 +390,11 @@ async function manejarACT_ESIM(tarea, connection) {
             } catch (errExtraccion) {
                 // AQUÍ SOLO CAE SI FALLA PROCEDEREXTRACCION
                 console.error(`❌ [Manejador] Error específico en extracción ID ${tarea.id}:`, errExtraccion.message);
-                await connection.execute(
-                    "UPDATE public.cola_tareas SET estado = 'ACT_ESIM_FALLO', resultado = ? WHERE id = ?", 
-                    [errExtraccion.message.substring(0, 255), tarea.id]
+                
+                // CORRECCIÓN PostgreSQL: Uso de $1, $2 y .query()
+                await connection.query(
+                    "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+                    ['ACT_ESIM_FALLO', errExtraccion.message.substring(0, 255), tarea.id]
                 );
                 return; // Terminamos aquí porque ya marcamos el fallo
             }
@@ -376,17 +406,22 @@ async function manejarACT_ESIM(tarea, connection) {
         // ERROR GENERAL (Login o Activación)
         console.error(`❌ [Manejador] Error en activación ID ${tarea.id}:`, e.message);
         
-        const [rows] = await connection.execute("SELECT estado FROM public.cola_tareas WHERE id = ?", [tarea.id]);
-        if (rows[0] && rows[0].estado !== 'ERROR') {
-            await connection.execute(
-                "UPDATE public.cola_tareas SET estado = 'ACT_ESIM_FALLO', resultado = ? WHERE id = ?", 
-                [e.message.substring(0, 255), tarea.id]
+        // CORRECCIÓN PostgreSQL: Uso de .query() y acceso a result.rows
+        const result = await connection.query("SELECT estado FROM public.cola_tareas WHERE id = $1", [tarea.id]);
+        
+        if (result.rows.length > 0 && result.rows[0].estado !== 'ERROR') {
+            await connection.query(
+                "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+                ['ACT_ESIM_FALLO', e.message.substring(0, 255), tarea.id]
             );
         }
     }
 }
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
+JavaScript
 async function manejarACT_ESIM_REINTENTO(tarea, connection) {
     console.log(`🔄 [Manejador] Modo REINTENTO: Extracción para ID: ${tarea.id}`);
     try {
@@ -396,7 +431,7 @@ async function manejarACT_ESIM_REINTENTO(tarea, connection) {
         // PASO CLAVE: Solo llamamos al login si la página NO está logueada
         const yaLogueado = await page.evaluate(() => !!document.querySelector('.ui-menuitem-text'));
         if (!yaLogueado) {
-            await ejecutarLoginTelcel(page, tarea.user_id);
+            await ejecutarLoginTelcel(page, tarea.user_id, tarea, connection);
         } else {
             console.log("✅ Sesión ya detectada en reintento, saltando login...");
         }
@@ -404,13 +439,18 @@ async function manejarACT_ESIM_REINTENTO(tarea, connection) {
         await procederExtraccion(page, tarea, connection);
     } catch (e) {
         console.error(`❌ [Manejador] Error en reintento ID ${tarea.id}:`, e.message);
-        await connection.execute("UPDATE public.cola_tareas SET estado = 'ACT_ESIM_FALLO', resultado = ? WHERE id = ?", [e.message, tarea.id]);
+        // CORRECCIÓN: Uso de $1, $2 y .query()
+        await connection.query(
+            "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+            ['ACT_ESIM_FALLO', e.message, tarea.id]
+        );
     }
 }
 
 async function procederExtraccion(page, tarea, connection) {
     // Marcamos inicialmente como procesando
-    await connection.execute("UPDATE public.cola_tareas SET estado = 'PROCESANDO_ESIM' WHERE id = ?", [tarea.id]);
+    // CORRECCIÓN: Uso de $1, $2 y .query()
+    await connection.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['PROCESANDO_ESIM', tarea.id]);
     
     try {
         const datos = await ejecutarExtraccionManual(page, tarea.user_id);
@@ -426,21 +466,21 @@ async function procederExtraccion(page, tarea, connection) {
         const estadoLimpio = (estadoAct || "").toLowerCase();
         const esCompletado = estadoLimpio.includes("completado") || estadoLimpio.includes("completed");
         
-        // CORRECCIÓN: Si es FALLA Y PONES ESTO: ACT_ESIM_REINTENTAR EL BOT LO VA A VER EN SEC DARA UN BUCLE INFINITO
         const nuevoEstado = esCompletado ? 'ACT_ESIM_VINCULAR_LISTA' : 'ACT_ESIM_VINCULAR_LISTA';
 
-        await connection.execute(
+        // CORRECCIÓN: Enumeración de $1 a $10 y uso de .query()
+        await connection.query(
             `UPDATE public.cola_tareas 
-             SET estado = ?, 
-                 ESTADO_ACT = ?, 
-                 folio_act = ?, 
-                 estatus_act = ?, 
-                 iccid = ?, 
-                 numero = ?, 
-                 resultado = ?, 
-                 imei = ?, 
-                 correo = ? 
-             WHERE id = ?`, 
+             SET estado = $1, 
+                 ESTADO_ACT = $2, 
+                 folio_act = $3, 
+                 estatus_act = $4, 
+                 iccid = $5, 
+                 numero = $6, 
+                 resultado = $7, 
+                 imei = $8, 
+                 correo = $9 
+             WHERE id = $10`, 
             [
                 nuevoEstado, 
                 estadoAct, 
@@ -458,19 +498,21 @@ async function procederExtraccion(page, tarea, connection) {
         console.log(`✅ [Ejecución única] Tarea ${tarea.id} finalizada con estado: ${nuevoEstado}`);
     } catch (err) {
         console.error(`❌ [Error en ejecución única] ID ${tarea.id}:`, err.message);
-        await connection.execute("UPDATE public.cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = ? WHERE id = ?", [err.message, tarea.id]);
+        // CORRECCIÓN: Uso de $1, $2, $3 y .query()
+        await connection.query(
+            "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+            ['FALLO_EXTRACCION', err.message, tarea.id]
+        );
         throw err; 
     }
 }
-
-// RENOMBRADA A MANEJADOR CORRECTO
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
 
 
 async function manejarACT_ESIM_EXITOSA_QR(tarea, connection) {
     console.log(`📸 [Manejador] Ejecutando inabiliatodo ?? secuencia QR para ID: ${tarea.id}`);
-    
-    //try {
+        //try {
         // --- CORRECCIÓN: ASEGURAR QUE EL DIRECTORIO EXISTA ---
       //  const dir = 'public/screenshot';
     //    if (!fs.existsSync(dir)) {
@@ -505,20 +547,13 @@ async function manejarACT_ESIM_EXITOSA_QR(tarea, connection) {
    // }
 return; }
 
-
-
-
-//--------
-
-
-
-
-
-
 //--
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
+JavaScript
 async function analizarYEjecutarAccion(page, numero, userId, tipo) {
     // 1. Siempre verificamos el estado en Telcel primero
+    // Nota: Asegúrate de que esta función maneje sus propios errores
     const estadoLinea = await hacerClicEnDatosLinea(page, userId, numero);
     
     // 2. Lógica de decisión según lo que nos dijo Telcel
@@ -536,14 +571,11 @@ async function analizarYEjecutarAccion(page, numero, userId, tipo) {
         return { 
             mensaje: "Recarga 1 enviada.", 
             registrado: "SI",
-            fecha: estadoLinea.fechaRecarga || "No disponible" // Aquí recuperas la fecha
+            fecha: estadoLinea.fechaRecarga || "No disponible" 
         };
     }
 }
-
-
-
-
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
 
 // 2. ANALISIS Y ACCIONES
@@ -648,7 +680,9 @@ async function hacerClicEnDatosLinea(page, userId, numero) {
 // FIN ANALISIS TELCEL 
 
 
-// --- RECARGAS ---
+// --- RECARGAS ---//-------------------------------------------------------------->> REVISADO PostgreSQL
+
+JavaScript
 async function ejecutarRecarga(page) {
     const btn = await page.evaluate(() => { const b = document.querySelector('#button_charge'); if(b) b.click(); return !!b; });
     if (!btn) throw new Error("Botón de recarga no encontrado");
@@ -708,18 +742,14 @@ async function registrarLinea(page, numero, userId, tareaId) {
 
     console.log('✅ Número inyectado y botón Validar presionado.');
 
-    // --- AQUÍ ESTÁ TU LÓGICA QUE HABÍA BORRADO POR ERROR ---
-    // Actualizamos la base de datos antes de salir
-    await pool.execute("UPDATE public.cola_tareas SET estado = 'ESPERANDO_USER' WHERE id = ?", [tareaId]);
+    // --- CORRECCIÓN PostgreSQL ---
+    // Cambiamos pool.execute por pool.query y el marcador '?' por '$1' y '$2'
+    await pool.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['ESPERANDO_USER', tareaId]);
     console.log("✅ SMS enviado. Estado actualizado a ESPERANDO_USER en DB...");
-
-    // --- AQUÍ VA LA CAPTURA ---
-    // La ponemos antes del return para confirmar que llegamos al final del proceso
-
 
     return { requiereToken: true }; 
 }
-
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
 //-- 2. INTENTAR EXTRAER QR
 
@@ -763,7 +793,9 @@ async function intentarExtraerQR(page, tareaId) {
         return null; 
     }
 }
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
+JavaScript
 async function manejarQR(page, tarea, connection) {
     console.log("📸 [INICIO] Extrayendo y decodificando QR para tarea:", tarea.id);
     
@@ -777,24 +809,31 @@ async function manejarQR(page, tarea, connection) {
         if (linkFinal) {
             console.log("🔗 [ÉXITO] Link decodificado:", linkFinal);
             
-            // 3. Guardamos SOLAMENTE el link. Ya no necesitamos guardar el Base64.
-                await connection.execute(
-                "UPDATE public.cola_tareas SET estado = 'ENVIANDO_QR', resultado = 'PROCESADO', link_final = ? WHERE id = ?", 
-                [linkFinal, tarea.id]
+            // 3. Guardamos SOLAMENTE el link. 
+            // CORRECCIÓN PG: Uso de $1, $2 y .query()
+            await connection.query(
+                "UPDATE public.cola_tareas SET estado = $1, resultado = $2, link_final = $3 WHERE id = $4", 
+                ['ENVIANDO_QR', 'PROCESADO', linkFinal, tarea.id]
             );
             console.log("💾 [FINALIZADO] Link guardado exitosamente en BD.");
         } else {
             console.error("❌ [ERROR] La imagen se obtuvo pero no se pudo decodificar.");
-            await connection.execute("UPDATE public.cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = 'Error al decodificar QR' WHERE id = ?", [tarea.id]);
+            // CORRECCIÓN PG: Uso de $1, $2, $3 y .query()
+            await connection.query(
+                "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+                ['FALLO_EXTRACCION', 'Error al decodificar QR', tarea.id]
+            );
         }
     } else {
         console.error("❌ [ERROR] No se pudo obtener la imagen QR del navegador.");
-        await connection.execute("UPDATE public.cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = 'No se obtuvo imagen' WHERE id = ?", [tarea.id]);
+        // CORRECCIÓN PG: Uso de $1, $2, $3 y .query()
+        await connection.query(
+            "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+            ['FALLO_EXTRACCION', 'No se obtuvo imagen', tarea.id]
+        );
     }
 }
-
-
-
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
 //-- 3. CAPTURA DE PANTALLA
 
@@ -826,46 +865,59 @@ async function tomarCaptura(page, nombreArchivo) {
 }
 
 
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
+JavaScript
 // Asegúrate de pasar la conexión como parámetro
 async function reintentarExtraccion(tareaId, connection) {
     try {
-        const query = "UPDATE public.cola_tareas SET estado = 'REINTENTAR_QR' WHERE id = ?";
-        await connection.execute(query, [tareaId]);
+        // CORRECCIÓN PG: Uso de $1 y .query()
+        const query = "UPDATE public.cola_tareas SET estado = $1 WHERE id = $2";
+        await connection.query(query, ['REINTENTAR_QR', tareaId]);
         console.log("✅ Orden de reintento enviada a la base de datos.");
     } catch (err) {
         console.error("Error al enviar orden de reintento:", err);
     }
 }
 
-//--- AQUI ESTA EL VOLANTTE DE CADA FUNCION TOKEN + QR
+//--- AQUI ESTA EL VOLANTE DE CADA FUNCION TOKEN + QR
 async function manejarInicioSesion(page, tarea) {
     console.log("🔑 Ejecutando Login...");
     // Aquí llamas a tu función de login existente
     await ejecutarLoginTelcel(page, tarea.user_id);
     
     // Si el login fue exitoso, el Dispatcher debería pasar el estado a VALIDANDO_TOKEN
-    await pool.execute("UPDATE public.cola_tareas SET estado = 'VALIDANDO_TOKEN' WHERE id = ?", [tarea.id]);
+    // CORRECCIÓN PG: Uso de $1, $2 y pool.query()
+    await pool.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['VALIDANDO_TOKEN', tarea.id]);
     return true;
 }
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
 // --- MANEJAR TOKEN ---
+
+//-------------------------------------------------------------->> REVISADO PostgreSQL
+
+JavaScript
 async function manejarToken(page, tarea, connection) {
     console.log("🎟️ Procesando Token...");
     const res = await inyectarTokenYValidar(page, tarea.id, tarea.numero);
     
     if (res.error) {
-        await connection.execute("UPDATE public.cola_tareas SET estado = 'FALLO_TOKEN', resultado = ? WHERE id = ?", [res.error, tarea.id]);
+        // CORRECCIÓN PG: Uso de $1, $2 y .query()
+        await connection.query("UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", ['FALLO_TOKEN', res.error, tarea.id]);
         return false;
     }
     
-    await connection.execute("UPDATE public.cola_tareas SET estado = 'GENERANDO_QR' WHERE id = ?", [tarea.id]);
+    // CORRECCIÓN PG: Uso de $1, $2 y .query()
+    await connection.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['GENERANDO_QR', tarea.id]);
     return true;
 }
+
 async function inyectarTokenYValidar(page, tareaId, numero) {
     // 1. Obtener token fresco
-    const [rows] = await pool.execute("SELECT token FROM public.cola_tareas WHERE id = ?", [tareaId]);
-    const token = rows[0]?.token;
+    // CORRECCIÓN PG: Uso de .query(), acceso a result.rows[0]
+    const result = await pool.query("SELECT token FROM public.cola_tareas WHERE id = $1", [tareaId]);
+    const token = result.rows[0]?.token;
 
     if (!token) return { error: "Token no encontrado en BD." };
 
@@ -880,7 +932,7 @@ async function inyectarTokenYValidar(page, tareaId, numero) {
             input.value = val;
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
-            input.dispatchEvent(new Event('blur', { bubbles: true })); // Algunos sitios requieren blur para validar
+            input.dispatchEvent(new Event('blur', { bubbles: true }));
         }
     }, selectorToken, token);
 
@@ -900,15 +952,18 @@ async function inyectarTokenYValidar(page, tareaId, numero) {
     if (mensajeError) {
         // --- CORRECCIÓN CRÍTICA ---
         // Al fallar, ponemos el token en NULL en la base de datos.
-        // Esto obliga a que el proceso solo avance si el frontend vuelve a escribir uno nuevo.
-        await pool.execute("UPDATE public.cola_tareas SET token = NULL WHERE id = ?", [tareaId]);
+        // CORRECCIÓN PG: Uso de .query() y $1, $2
+        await pool.query("UPDATE public.cola_tareas SET token = NULL WHERE id = $1", [tareaId]);
         
         return { error: mensajeError };
     }
     
     return { success: true };
 }
+//-------------------------------------------------------------->> REVISADO PostgreSQL
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
+JavaScript
 async function manejarQR_SMS(page, tarea, connection) {
     console.log(`📸 [INICIO] Extracción QR para Tarea ID: ${tarea.id} | User: ${tarea.user_id}`);
 
@@ -937,10 +992,11 @@ async function manejarQR_SMS(page, tarea, connection) {
         if (linkFinal) {
             console.log("🔗 [ÉXITO] Link decodificado:", linkFinal);
             
-            // CORRECCIÓN: Incluimos user_id en el WHERE para mantener la seguridad de la API
-            await connection.execute(
-                "UPDATE public.cola_tareas SET estado = 'ENVIANDO_QR', resultado = 'PROCESADO', link_final = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?",
-                [linkFinal, tarea.id, tarea.user_id]
+            // CORRECCIÓN PG: Uso de $1, $2, $3 y .query()
+            // Nota: fecha_actualizacion = NOW() es correcto en Postgres
+            await connection.query(
+                "UPDATE public.cola_tareas SET estado = $1, resultado = $2, link_final = $3, fecha_actualizacion = NOW() WHERE id = $4 AND user_id = $5",
+                ['ENVIANDO_QR', 'PROCESADO', linkFinal, tarea.id, tarea.user_id]
             );
         } else {
             throw new Error("Fallo en la decodificación del QR");
@@ -949,26 +1005,25 @@ async function manejarQR_SMS(page, tarea, connection) {
     } catch (e) {
         console.error(`❌ [ERROR] Tarea ${tarea.id}: ${e.message}`);
         
-        // CORRECCIÓN: Marcamos como fallo incluyendo el user_id para que el 
-        // backend siga reconociendo la propiedad de la tarea durante el reintento.
-        await connection.execute(
-            "UPDATE public.cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?",
+        // CORRECCIÓN PG: Uso de $1, $2, $3 y .query()
+        await connection.query(
+            "UPDATE public.cola_tareas SET estado = $1, resultado = $2, fecha_actualizacion = NOW() WHERE id = $3 AND user_id = $4",
             [e.message.substring(0, 255), tarea.id, tarea.user_id]
         );
     }
 }
-
-
-
-//----------------------------------------------------------------------------------------------------------
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
 //----------------------------------------------------------------------------------------------------------
 //-------------------------------------------FUNCIONES ACTIVAR eSIM-----------------------------------------
 //----------------------------------------------------------------------------------------------------------
 
-//----------------------------------------------------------------------------------------------------------
 
 
+
+//-------------------------------------------------------------->> REVISADO PostgreSQL
+
+JavaScript
 async function activarESIM(page, tarea, connection) {
     const { ciudad, correo, imei } = tarea;
     
@@ -1082,15 +1137,16 @@ async function activarESIM(page, tarea, connection) {
     } catch (e) {
         console.error(`❌ [BOT ERROR] Tarea ${tarea.id} falló en: ${e.message}`);
         if (connection) {
-            await connection.execute(
-                "UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", 
-                [e.message.substring(0, 255), tarea.id]
+            // CORRECCIÓN PG: Uso de $1, $2 y .query()
+            await connection.query(
+                "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+                ['ERROR', e.message.substring(0, 255), tarea.id]
             );
         }
         return false;
     }
 }
-
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
 
 
@@ -1229,7 +1285,9 @@ async function ejecutarExtraccionManual(page, userId) {
 //------------------------------------------------------------------------------------------------------------------------
 
 
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
+JavaScript
 async function manejarACT_FISICO(tarea, connection, estadoActual) {
     console.log(`🛠 [Manejador] Iniciando activación FÍSICA para tarea ID: ${tarea.id}`);
     try {
@@ -1248,21 +1306,27 @@ async function manejarACT_FISICO(tarea, connection, estadoActual) {
         const exito = await activarFisica(page, tarea); 
         
         if (exito) {
-            await connection.execute(
-                "UPDATE public.cola_tareas SET estado = 'ACT_FISICA_EXITOSA_QR', user_id = ? WHERE id = ?", 
-                [tarea.user_id, tarea.id]
+            // CORRECCIÓN PG: Uso de .query() y marcadores $1, $2
+            await connection.query(
+                "UPDATE public.cola_tareas SET estado = $1, user_id = $2 WHERE id = $3", 
+                ['ACT_FISICA_EXITOSA_QR', tarea.user_id, tarea.id]
             );
         } else {
             throw new Error("La función activarFisica retornó falso.");
         }
     } catch (e) {
         console.error(`❌ [Manejador] Error general en activación física ID ${tarea.id}:`, e.message);
-        await connection.execute("UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", [e.message.substring(0, 255), tarea.id]);
+        // CORRECCIÓN PG: Uso de .query() y marcadores $1, $2
+        await connection.query(
+            "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+            ['ERROR', e.message.substring(0, 255), tarea.id]
+        );
     }
 }
+//-------------------------------------------------------------->> REVISADO PostgreSQL
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
-
-
+JavaScript
 async function activarFisica(page, tarea, connection) {
     console.log("🤖 [Bot] Iniciando Activación Individual para:", tarea.numero);
 
@@ -1363,20 +1427,22 @@ async function activarFisica(page, tarea, connection) {
     } catch (e) {
         console.error(`❌ [BOT ERROR] Tarea ${tarea.id} falló en: ${e.message}`);
         if (connection) {
-            await connection.execute(
-                "UPDATE public.cola_tareas SET estado = 'ERROR', estatus_act = 'ERROR', resultado = ? WHERE id = ?", 
-                [e.message.substring(0, 255), tarea.id]
+            // CORRECCIÓN PG: Uso de .query() y marcadores $1, $2, $3
+            await connection.query(
+                "UPDATE public.cola_tareas SET estado = $1, estatus_act = $2, resultado = $3 WHERE id = $4", 
+                ['ERROR', 'ERROR', e.message.substring(0, 255), tarea.id]
             );
         }
         return false;
     }
 }
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
 
 
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
-
-
+JavaScript
 async function manejarQR_ACT(page, tarea, connection) {
     console.log(`📸 [INICIO] Extracción QR para Tarea ID: ${tarea.id} | User: ${tarea.user_id}`);
 
@@ -1405,10 +1471,10 @@ async function manejarQR_ACT(page, tarea, connection) {
         if (linkFinal) {
             console.log("🔗 [ÉXITO] Link decodificado:", linkFinal);
             
-            // CORRECCIÓN: Incluimos user_id en el WHERE para mantener la seguridad de la API
-            await connection.execute(
-                "UPDATE public.cola_tareas SET estado = 'ENVIANDO_QR', resultado = 'PROCESADO', link_final = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?",
-                [linkFinal, tarea.id, tarea.user_id]
+            // CORRECCIÓN PG: Uso de .query() y marcadores $1, $2, $3, $4, $5
+            await connection.query(
+                "UPDATE public.cola_tareas SET estado = $1, resultado = $2, link_final = $3, fecha_actualizacion = NOW() WHERE id = $4 AND user_id = $5",
+                ['ENVIANDO_QR', 'PROCESADO', linkFinal, tarea.id, tarea.user_id]
             );
         } else {
             throw new Error("Fallo en la decodificación del QR");
@@ -1417,18 +1483,19 @@ async function manejarQR_ACT(page, tarea, connection) {
     } catch (e) {
         console.error(`❌ [ERROR] Tarea ${tarea.id}: ${e.message}`);
         
-        // CORRECCIÓN: Marcamos como fallo incluyendo el user_id para que el 
-        // backend siga reconociendo la propiedad de la tarea durante el reintento.
-        await connection.execute(
-            "UPDATE public.cola_tareas SET estado = 'FALLO_EXTRACCION', resultado = ?, fecha_actualizacion = NOW() WHERE id = ? AND user_id = ?",
-            [e.message.substring(0, 255), tarea.id, tarea.user_id]
+        // CORRECCIÓN PG: Uso de .query() y marcadores $1, $2, $3, $4
+        await connection.query(
+            "UPDATE public.cola_tareas SET estado = $1, resultado = $2, fecha_actualizacion = NOW() WHERE id = $3 AND user_id = $4",
+            ['FALLO_EXTRACCION', e.message.substring(0, 255), tarea.id, tarea.user_id]
         );
     }
 }
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
-
-async function manejarACT_FISICA_REINTENTO(tarea, connection) {
+JavaScript
+async function manejarACT_FISICO_REINTENTO(tarea, connection) {
     console.log(`🔄 [Manejador] Iniciando REINTENTO para ID: ${tarea.id} (Estado: ${tarea.estado})`);
     try {
         const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
@@ -1445,10 +1512,10 @@ async function manejarACT_FISICA_REINTENTO(tarea, connection) {
         
     } catch (e) {
         console.error(`❌ [Manejador] Error en reintento ID ${tarea.id}:`, e.message);
-        // Marcamos como FALLO para que el Dispatcher sepa que sigue habiendo problemas, pero no lo bloquee
-        await connection.execute(
-            "UPDATE public.cola_tareas SET estado = 'ACT_FISICA_FALLO', resultado = ? WHERE id = ?", 
-            [e.message, tarea.id]
+        // CORRECCIÓN PG: Uso de .query() y marcadores $1, $2
+        await connection.query(
+            "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+            ['ACT_FISICA_FALLO', e.message, tarea.id]
         );
     }
 }
@@ -1460,19 +1527,20 @@ async function procederExtraccion_FISICA(page, tarea, connection) {
         const datos = await ejecutarExtraccionManual_FISICA(page, tarea.user_id);
         const esCompletado = datos.estatus_act === 'EXITOSO';
         
-        // Si es completado, finalizamos. Si no, marcamos para REINTENTO (Intervención humana)
+        // Si es completado, finalizamos. Si no, marcamos para REINTENTO
         const nuevoEstado = esCompletado ? 'COMPLETADO' : 'REINTENTANDO_EXTRACCION';
 
-        await connection.execute(
+        // CORRECCIÓN PG: Uso de .query() y marcadores $1 al $9
+        await connection.query(
             `UPDATE public.cola_tareas 
-             SET estado = ?, 
-                 ESTADO_ACT = ?, 
-                 folio_act = ?, 
-                 estatus_act = ?, 
-                 iccid = ?, 
-                 numero = ?, 
-                 resultado = ? 
-             WHERE id = ? AND user_id = ?`,
+             SET estado = $1, 
+                 ESTADO_ACT = $2, 
+                 folio_act = $3, 
+                 estatus_act = $4, 
+                 iccid = $5, 
+                 numero = $6, 
+                 resultado = $7 
+             WHERE id = $8 AND user_id = $9`,
             [
                 nuevoEstado, 
                 datos.estadoAct, 
@@ -1488,11 +1556,15 @@ async function procederExtraccion_FISICA(page, tarea, connection) {
         console.log(`✅ [Extracción] Tarea ${tarea.id} marcada como: ${nuevoEstado}`);
     } catch (errExtraccion) {
         console.error(`❌ [Error en extracción] ID ${tarea.id}:`, errExtraccion.message);
-        // Si hay error técnico, marcamos como FALLO_EXTRACCION (el bot se detiene)
-        await connection.execute("UPDATE public.cola_tareas SET estado = 'ERROR', resultado = ? WHERE id = ?", [errExtraccion.message, tarea.id]);
+        // CORRECCIÓN PG: Uso de .query() y marcadores $1, $2
+        await connection.query(
+            "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+            ['ERROR', errExtraccion.message, tarea.id]
+        );
         throw errExtraccion;
     }
 }
+//-------------------------------------------------------------->> REVISADO PostgreSQL
 
 
 async function ejecutarExtraccionManual_FISICA(page, userId) {
