@@ -2,7 +2,7 @@ const { Pool } = require('pg');
 
 // Configuración robusta para evitar el error de red1
 const pool = new Pool({
-  connectionString: process.env.SUPAABASE_URL,
+  connectionString: process.env.SUPABASE_URL,
   ssl: {
     rejectUnauthorized: false
   },
