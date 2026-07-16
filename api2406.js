@@ -153,37 +153,38 @@ app.get('/monitoreo.html', verifyToken, (req, res) => {
 
 // --- 2. Aplicación en la ruta --- REVISADO PostgreSQL
 // aqui tambien esta validar force
+
+
 app.post('/api/solicitar-consulta', verifyToken, async (req, res) => {   
     const userId = req.user?.id; 
     const { numero, portal, tipo } = req.body;
+@@ -211,70 +211,70 @@
 
-    if (!numero || !userId) {
-        console.warn(`⚠️ [API] Intento de tarea fallido: Faltan datos.`);
-        return res.status(400).json({ error: "Datos incompletos" });
-    }
+            console.log("✅ Registro encontrado:", registro);
 
-    try {
-        // CORRECCIÓN: Usamos $1, $2... y agregamos RETURNING id para obtener el ID generado
-        const query = `
-            INSERT INTO public.cola_tareas (user_id, numero, portal, estado, tipo_tarea) 
-            VALUES ($1, $2, $3, 'PENDIENTE', $4) 
-            RETURNING id
-        `;
-        const values = [userId, numero, portal || 'TELCEL', tipo || 'RECARGA'];
-        
-        const result = await pool.query(query, values);
+            const estadoActual = registro.estado || 'PENDIENTE_PROCESAMIENTO';
+            const estadoActual = registro.estado || 'RECARGA_PENDIENTE_REGISTRO';
+            let resultado = registro.resultado;
 
-        // En pg, el ID está en result.rows[0].id
-        const tareaId = result.rows[0].id;
+            if (estadoActual === 'COMPLETADO' && resultado) {
+                try { 
+                    resultado = typeof resultado === 'string' ? JSON.parse(resultado) : resultado; 
+                } catch (e) { 
+                    console.error("❌ Error al parsear JSON:", e); 
+                }
+            }
 
-        console.log(`✅ [API] Tarea creada exitosamente con ID: ${tareaId}`);
-        res.json({ tareaId: tareaId, status: "Tarea creada" });
-
+            res.json({ estado: estadoActual, resultado: resultado });
+        } else {
+            console.warn("⚠️ No se encontró registro con ID:", req.params.id);
+            res.status(404).json({ error: "No encontrada" });
+        }
     } catch (error) {
-        console.error(`❌ [API] Error crítico al insertar tarea:`, error);
-        res.status(500).json({ error: "Error interno del servidor" });
+        console.error("❌ Error en servidor:", error);
+        res.status(500).json({ error: error.message });
     }
 });
+
 
 //---------------------------------------------------------------------- > REVISADO PostgreSQL
 app.get('/api/estado-consolidado/:numero', verifyToken, async (req, res) => {
