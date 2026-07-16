@@ -642,13 +642,15 @@ function renderizarQR(item) {
 //------------------------------------------------
 let promesaUsuario = null;
 let ID_USUARIO_ACTUAL = null;
-//-- parte de validarforceasync function cargarIdUsuario() {
+//-- parte de validarforce
+
+async function cargarIdUsuario() {
     if (promesaUsuario) return promesaUsuario;
 
     promesaUsuario = (async () => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/auth/me`, { 
+            const res = await fetch(`${API_URL}api/auth/me`, { 
                 headers: { 'Authorization': 'Bearer ' + token }
             });
             
