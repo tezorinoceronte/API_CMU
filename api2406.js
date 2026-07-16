@@ -32,7 +32,7 @@ app.use('/auth', authRoutes);
 
 
 
-// --- ESTE MIDDLEWARE REEMPLAZA A TU "AUTH" DE SESIÓN ---
+// --- ESTE MIDDLEWARE REEMPLAZA A TU "AUTH" DE SESIÓN ---1
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     console.log("DEBUG - Header recibido:", authHeader); // ¿Es null o llega algo?
