@@ -1,10 +1,26 @@
 console.log(`📡... Este es un mensaje a AthanosMK`);
+const { Pool } = require('pg');
+
+// Configuración robusta para evitar el error de red1
+const pool = new Pool({
+  connectionString: process.env.SUPABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  },
+  // Forzar IPv4 para evitar el error ENETUNREACH
+  family: 4, 
+  // Aumentar tiempos de espera para entornos en la nube
+  connectionTimeoutMillis: 15000,
+  idleTimeoutMillis: 30000,
+  max: 5 // Reducir conexiones simultáneas para evitar saturación
+});
+console.log(`🔍 [DB] Intentando conectar a: ${process.env.SUPABASE_URL ? "--------BD EN API CONFIGURADA" : "¡ERROR! URL NO ENCONTRADA"}`);
 
 const fs = require('fs-extra');
 const path = require('path');
 const Jimp = require('jimp');
 const jsQR = require('jsqr');
-const { pool } = require('./cola');
+
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const { obtenerUrlDeBase64 } = require('./utilidades'); 
