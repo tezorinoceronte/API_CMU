@@ -1,18 +1,19 @@
 const { Pool } = require('pg');
+const bcrypt = require('bcryptjs'); 
+const jwt = require('jsonwebtoken');
 
-// Configuración robusta para evitar el error de red1
+// Datos de conexión directos
 const pool = new Pool({
-  connectionString: process.env.SUPABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  },
-  // Forzar IPv4 para evitar el error ENETUNREACH
-  family: 4, 
-  // Aumentar tiempos de espera para entornos en la nube
-  connectionTimeoutMillis: 15000,
-  idleTimeoutMillis: 30000,
-  max: 5 // Reducir conexiones simultáneas para evitar saturación
+    host: 'aws-0-us-east-1.pooler.supabase.com',
+    user: 'postgres.srfsdnphgdwrqjggcwfc',
+    password: 'TyZzGz0RsYJcMcqM', // Aquí pones tu contraseña tal cual
+    database: 'postgres',
+    port: 5432,
+    ssl: { rejectUnauthorized: false },
+    family: 4
 });
+
+
 const logica = require('./logicaCMU');
 
 const { 
