@@ -1,8 +1,10 @@
-// Nuevo contenido de cola.js
+const { Pool } = require('pg'); 
+
+// 2. AHORA SÍ PUEDES USARLA
 const pool = new Pool({
   connectionString: process.env.SUPABASE_URL,
   ssl: { rejectUnauthorized: false },
-  // Fuerza a usar IPv4
-  host: 'db.srfsdnphgdwrqjggcwfc.supabase.co', // Asegúrate de extraer solo el host aquí
-  family: 4 
+  family: 4 // Fuerza IPv4 para evitar el error ENETUNREACH
 });
+
+module.exports = pool;
