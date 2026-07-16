@@ -810,5 +810,5 @@ app.listen(PORT, () => {
 const { iniciarDispatcher } = require('./dispatcher'); // Ajusta la ruta a tu archivo
 iniciarDispatcher();
 
-//const { iniciarWorker } = require('./worker');         // Ajusta la ruta a tu archivo
+const { iniciarWorker } = require('./worker');         // Ajusta la ruta a tu archivo
 iniciarWorker();
