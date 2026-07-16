@@ -87,7 +87,7 @@ async function cicloWorker() {
             }
         }
     } catch (err) {
-        console.error(`❌ [Worker: ${WORKER_ID}] Error crítico en tarea ${tarea?.id || 'N/A'}:`, err.message);
+        console.error(`💗❤️‍🔥💕 [Worker: ${WORKER_ID}] No encuentro que hacer o hay error crítico en tarea ${tarea?.id || 'N/A'}:`, err.message);
         if (client && tarea && tarea.id) {
             await client.query(
                 "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
