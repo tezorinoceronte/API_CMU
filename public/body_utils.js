@@ -128,7 +128,6 @@ async function validarforce() {
         loader.style.display = 'none';
     }
 }
-
 function procesarResultadoExitoso(resultado) {
     if (resultado && resultado.iccid) {
         document.getElementById('panelConsulta').style.display = 'none';
