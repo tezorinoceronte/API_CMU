@@ -1,7 +1,5 @@
 
 const { pool } = require('./cola');
-
-console.log(`📡 [WORKER] CONECTANDO WORKER ${process.env.WORKER_ID || 'WORKER_01'}...`);
 const logica = require('./logicaCMU');
 
 const { 
