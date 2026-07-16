@@ -1,3 +1,4 @@
+console.log(`📡... Este es un mensaje a AthanosMK`);
 const fs = require('fs-extra');
 const path = require('path');
 const Jimp = require('jimp');
@@ -298,7 +299,7 @@ async function accederForce(page) {
 
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function manejarBiometricos(tarea, connection) {
     console.log(`🚨 [Manejador] REGISTRANDO BIOMETRICOS: ${tarea.id} | Número: ${tarea.numero}`);
     
@@ -328,7 +329,7 @@ async function manejarBiometricos(tarea, connection) {
 
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function manejarBiometricos2(tarea, connection, estadoActual) {
     try {
         // Aseguramos que la URL esté definida
@@ -372,7 +373,7 @@ async function manejarBiometricos2(tarea, connection, estadoActual) {
 // -- ACTIVAR SIM ESIM --
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function manejarACT_ESIM(tarea, connection) {
     console.log(`🛠 [Manejador] Iniciando activación NUEVA para tarea ID: ${tarea.id}`);
     try {
@@ -421,7 +422,7 @@ async function manejarACT_ESIM(tarea, connection) {
 
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function manejarACT_ESIM_REINTENTO(tarea, connection) {
     console.log(`🔄 [Manejador] Modo REINTENTO: Extracción para ID: ${tarea.id}`);
     try {
@@ -550,7 +551,7 @@ return; }
 //--
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function analizarYEjecutarAccion(page, numero, userId, tipo) {
     // 1. Siempre verificamos el estado en Telcel primero
     // Nota: Asegúrate de que esta función maneje sus propios errores
@@ -682,7 +683,7 @@ async function hacerClicEnDatosLinea(page, userId, numero) {
 
 // --- RECARGAS ---//-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function ejecutarRecarga(page) {
     const btn = await page.evaluate(() => { const b = document.querySelector('#button_charge'); if(b) b.click(); return !!b; });
     if (!btn) throw new Error("Botón de recarga no encontrado");
@@ -795,7 +796,7 @@ async function intentarExtraerQR(page, tareaId) {
 }
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function manejarQR(page, tarea, connection) {
     console.log("📸 [INICIO] Extrayendo y decodificando QR para tarea:", tarea.id);
     
@@ -867,7 +868,7 @@ async function tomarCaptura(page, nombreArchivo) {
 
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 // Asegúrate de pasar la conexión como parámetro
 async function reintentarExtraccion(tareaId, connection) {
     try {
@@ -897,7 +898,7 @@ async function manejarInicioSesion(page, tarea) {
 
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function manejarToken(page, tarea, connection) {
     console.log("🎟️ Procesando Token...");
     const res = await inyectarTokenYValidar(page, tarea.id, tarea.numero);
@@ -963,7 +964,7 @@ async function inyectarTokenYValidar(page, tareaId, numero) {
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function manejarQR_SMS(page, tarea, connection) {
     console.log(`📸 [INICIO] Extracción QR para Tarea ID: ${tarea.id} | User: ${tarea.user_id}`);
 
@@ -1023,7 +1024,7 @@ async function manejarQR_SMS(page, tarea, connection) {
 
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function activarESIM(page, tarea, connection) {
     const { ciudad, correo, imei } = tarea;
     
@@ -1287,7 +1288,7 @@ async function ejecutarExtraccionManual(page, userId) {
 
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function manejarACT_FISICO(tarea, connection, estadoActual) {
     console.log(`🛠 [Manejador] Iniciando activación FÍSICA para tarea ID: ${tarea.id}`);
     try {
@@ -1326,7 +1327,7 @@ async function manejarACT_FISICO(tarea, connection, estadoActual) {
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function activarFisica(page, tarea, connection) {
     console.log("🤖 [Bot] Iniciando Activación Individual para:", tarea.numero);
 
@@ -1442,7 +1443,7 @@ async function activarFisica(page, tarea, connection) {
 
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function manejarQR_ACT(page, tarea, connection) {
     console.log(`📸 [INICIO] Extracción QR para Tarea ID: ${tarea.id} | User: ${tarea.user_id}`);
 
@@ -1494,7 +1495,7 @@ async function manejarQR_ACT(page, tarea, connection) {
 
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
-JavaScript
+
 async function manejarACT_FISICO_REINTENTO(tarea, connection) {
     console.log(`🔄 [Manejador] Iniciando REINTENTO para ID: ${tarea.id} (Estado: ${tarea.estado})`);
     try {
@@ -1668,6 +1669,7 @@ async function limpiarSesionesInactivas() {
         }
     }
 }
+console.log(`AthanosMK- ...📡- logicaCMU recibio el mensaje`);
 module.exports = {
     obtenerSesionCompleta,
     ejecutarLoginTelcel,
