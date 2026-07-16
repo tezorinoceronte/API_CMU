@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const { pool } = require('./cola'); //--
+const { pool } = require('./cola'); 
 
 const app = express();
 const PORT = process.env.PORT || 10000;
