@@ -6,7 +6,11 @@ const jwt = require('jsonwebtoken');
 
 // Datos de conexión directos
 const pool = new Pool({
-    connectionString: "postgresql://postgres.srfsdnphgdwrqjggcwfc:TyZzGz0RsYJcMcqM@aws-0-us-east-1.pooler.supabase.com:5432/postgres",
+    host: 'aws-0-us-east-1.pooler.supabase.com',
+    user: 'postgres.srfsdnphgdwrqjggcwfc',
+    password: 'TyZzGz0RsYJcMcqM', // Aquí pones tu contraseña tal cual
+    database: 'postgres',
+    port: 5432,
     ssl: { rejectUnauthorized: false },
     family: 4
 });
