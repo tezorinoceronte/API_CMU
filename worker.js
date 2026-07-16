@@ -13,15 +13,13 @@ const {
 } = logica;
 
 const WORKER_ID = process.env.WORKER_ID || 'WORKER_01';
-
 async function cicloWorker() {
     let client;
     let tarea;
     try {
-        // 1. Log de conexión a BD - Se ejecuta cada ciclo
+        // 1. Intento de conexión con diagnóstico profundo
         client = await pool.connect();
-        console.log(`💾 [DB] Conectado al pool de PostgreSQL para Worker: ${WORKER_ID}`);
-
+        
         const res = await client.query(
             `SELECT * FROM public.cola_tareas 
              WHERE worker_id = $1 
@@ -32,19 +30,16 @@ async function cicloWorker() {
         );
 
         if (res.rows.length === 0) {
-            // Sin tareas, liberamos conexión y salimos silenciosamente
             client.release();
-            return;
+            return; // Salida silenciosa si no hay tareas
         }
 
         tarea = res.rows[0];
+        console.log(`🚀 [Worker: ${WORKER_ID}] Tarea encontrada: ${tarea.id} | Estado: ${tarea.estado}`);
 
-        // 2. Log cuando toma la tarea
+        // 2. Marcamos como procesando (solo si no es validación de token)
         if (tarea.estado !== 'VALIDANDO_TOKEN' && tarea.estado !== 'FALLO_TOKEN') {
             await client.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['PROCESANDO', tarea.id]);
-            console.log(`🚀 [Worker: ${WORKER_ID}] Tarea ${tarea.id} tomada. Estado: '${tarea.estado}' -> 'PROCESANDO'`);
-        } else {
-            console.log(`🚀 [Worker: ${WORKER_ID}] Retomando tarea ${tarea.id} en estado '${tarea.estado}'`);
         }
 
         // --- LÓGICA DE DELEGACIÓN ---
@@ -85,11 +80,14 @@ async function cicloWorker() {
                 await manejarQR(null, tarea, client);
             }
         }
+
     } catch (err) {
-        // Log de error solo si algo falló realmente
-        console.error(`❌ [Worker: ${WORKER_ID}] Error en ciclo:`, err.message);
+        // DIAGNÓSTICO PROFUNDO: Solo se activa si algo sale mal
+        console.error(`🚨 [Worker: ${WORKER_ID}] ERROR DETALLADO:`);
+        console.error(`   Mensaje: ${err.message}`);
+        console.error(`   Stack: ${err.stack}`);
         
-        // Solo intentamos actualizar BD si 'tarea' fue definida, evitando el error de referencia N/A
+        // Reportamos error a BD solo si logramos obtener una tarea antes de fallar
         if (tarea && tarea.id) {
             await client.query(
                 "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
@@ -97,13 +95,12 @@ async function cicloWorker() {
             ).catch(e => console.error("❌ Falló el reporte de error a BD:", e.message));
         }
     } finally {
-        // Liberación segura del cliente al pool
-        if (client) {
-            client.release();
-            console.log(`🔌 [DB] Conexión liberada.`);
-        }
+        if (client) client.release();
     }
 }
+
+
+
 
 async function iniciarWorker() {
     console.log(`✅ ${WORKER_ID} activo y esperando tareas...`);
