@@ -108,6 +108,6 @@ async function iniciarWorker() {
         await new Promise(resolve => setTimeout(resolve, 2000));
     }
 }
-
-console.log(`📡 [WOKER] ON`);
-iniciarWorker();
+console.log(`..📡..................................📡............... [WOKER] ON✅`);
+console.log(`..📡.....📡............................................ [WOKER] ON✅`);
+module.exports = { iniciarWorker };
