@@ -162,8 +162,7 @@ app.post('/api/solicitar-consulta', verifyToken, async (req, res) => {
 
             console.log("✅ Registro encontrado:", registro);
 
-            const estadoActual = registro.estado || 'PENDIENTE_PROCESAMIENTO';
-            const estadoActual = registro.estado || 'RECARGA_PENDIENTE_REGISTRO';
+            const estadoActual = registro.estado || 'PENDIENTE';
             let resultado = registro.resultado;
 
             if (estadoActual === 'COMPLETADO' && resultado) {
