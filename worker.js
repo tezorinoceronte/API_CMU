@@ -1,3 +1,17 @@
+console.log(`📡 [WOKER] CONECTANDO WORKER `);
+
+const { pool } = require('./cola'); // Asegúrate que exporte el pool de 'pg'
+const logica = require('./logicaCMU');
+
+const { 
+    manejarRecargas, manejarBiometricos, manejarACT_FISICO, manejarACT_ESIM, 
+    manejarACT_ESIM_REINTENTO, ejecutar_ACT_ESIM_EXITOSA_QR, manejarACT_FISICA_REINTENTO,
+    manejarQR, manejarQR_ACT, manejarToken, obtenerSesionCompleta, 
+    limpiarSesionesInactivas, manejarQR_SMS
+} = logica;
+
+const WORKER_ID = process.env.WORKER_ID || 'WORKER_01';
+
 async function cicloWorker() {
     let client;
     let tarea;
@@ -87,3 +101,17 @@ async function cicloWorker() {
         }
     }
 }
+
+async function iniciarWorker() {
+    console.log(`✅ ${WORKER_ID} activo y esperando tareas...`);
+    while (true) {
+        await cicloWorker();
+        await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+}
+
+console.log(`📡 [WOKER] ON`);
+iniciarWorker();
+console.log(`..📡..................................📡............... [WOKER] ON✅`);
+console.log(`..📡.....📡............................................ [WOKER] ON✅`);
+module.exports = { iniciarWorker };
