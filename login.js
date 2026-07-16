@@ -1,58 +1,40 @@
-const { Pool } = require('pg');
-
-// Configuración robusta para evitar el error de red1
-const pool = new Pool({
-  connectionString: process.env.SUPABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  },
-  // Forzar IPv4 para evitar el error ENETUNREACH
-  family: 4, 
-  // Aumentar tiempos de espera para entornos en la nube
-  connectionTimeoutMillis: 15000,
-  idleTimeoutMillis: 30000,
-  max: 5 // Reducir conexiones simultáneas para evitar saturación
-});
-
-console.log(`🔍 --------------------------LOGIN conectar a: ${process.env.SUPABASE_URL ? "LOGIN CONFIGURADA" : "¡ERROR! DN NO ENCONTRADA"}`);
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET
-
+const pool = require('./cola'); // IMPORTA EL POOL CENTRALIZADO
 
 router.post('/login', async (req, res) => {
     const { correo, password } = req.body;
 
     if (!correo || !password) {
-        return res.status(400).json({ success: false, message: "Datos incompletos" });
+        return res.status(400).json({ success: false, message: "Faltan datos" });
     }
 
     try {
-        // CORRECCIÓN 1: Usar .query en lugar de .execute
-        // CORRECCIÓN 2: Usar $1 en lugar de ?
+        // 1. Buscar usuario
         const result = await pool.query('SELECT * FROM public.usuarios_act_cmu WHERE correo = $1', [correo]);
         
-        // CORRECCIÓN 3: Extraer 'rows' del resultado de pg
-        const user = result.rows[0];
-
-        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-            return res.status(401).json({ success: false, message: "Credenciales incorrectas" });
+        if (result.rows.length === 0) {
+            return res.status(401).json({ success: false, message: "Usuario no encontrado" });
         }
 
-        const token = jwt.sign(
-            { id: user.id, nombre: user.nombre_completo, rol: user.rol }, 
-            JWT_SECRET, 
-            { expiresIn: '24h' }
-        );
+        const user = result.rows[0];
 
-        console.log("✅ [LOGIN] Usuario autenticado, token generado.");
-        res.json({ success: true, token: token });
+        // 2. Verificar contraseña
+        const match = await bcrypt.compare(password, user.password_hash);
+        if (!match) {
+            return res.status(401).json({ success: false, message: "Contraseña incorrecta" });
+        }
+
+        // 3. Generar token
+        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '24h' });
+        
+        res.json({ success: true, token });
 
     } catch (err) {
-        console.error("❌ ERROR EN LOGIN:", err);
-        res.status(500).json({ success: false, message: "Error interno del servidor" });
+        console.error("LOG DE ERROR DETALLADO:", err);
+        res.status(500).json({ success: false, message: "Error interno, revisa logs" });
     }
 });
 
