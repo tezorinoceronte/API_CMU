@@ -492,7 +492,7 @@ app.get('/api/estado-tarea/:tareaId', verifyToken, async (req, res) => {
 
 app.post('/api/reintentar', verifyToken, async (req, res) => {
 const { tareaId } = req.body;
-console.log(📡 [Backend] Solicitud de REINTENTO recibida para ID: ${tareaId} por Usuario: ${req.user.id});
+console.log(`📡 [Backend] Solicitud de REINTENTO recibida para ID: ${tareaId} por Usuario: ${req.user.id}`);
 
 try {
     // En pg, usamos pool.query directamente (no necesitamos getConnection/release)
@@ -730,7 +730,7 @@ app.get('/api/obtener-resultado-vincular/:id', verifyToken, async (req, res) => 
 // FISICA 
 //---------------------------------------------------------------------- > REVISADO PostgreSQL
 
-JavaScript
+
 app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
     const { id, nuevo_estado } = req.body;
     const estadoLimpio = String(nuevo_estado || '').trim().toUpperCase();
@@ -780,6 +780,6 @@ app.post('/api/solicitar-recarga', verifyToken, async (req, res) => {
         });
     }
 });
-
+console.log(".....🔥🔥🔥 api2406js arranco ON ...🔥");
 
 app.listen(PORT, () => console.log(`🚨...🚀 api2406.js corriendo en http://localhost:${PORT}`));
