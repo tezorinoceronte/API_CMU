@@ -100,23 +100,27 @@ async function obtenerSesionCompleta(userId, url) {
 
 
 async function manejarRecargas(tarea, connection) {
+    console.log(`🔄 [Recarga][ID: ${tarea.id}] Iniciando proceso de recarga para número: ${tarea.numero} | Portal: ${tarea.portal}`);
+    
     try {
         const url = (tarea.portal === 'FORCE') ? 'https://force.mmoviles.com/login' : 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
+        
+        console.log(`🌐 [Recarga][ID: ${tarea.id}] Obteniendo sesión en ${tarea.portal}...`);
         const page = await obtenerSesionCompleta(tarea.user_id, url);
         
         const formatearFecha = (fecha) => {
             if (!fecha || fecha === 'No Info') return null;
             const partes = fecha.split('-');
             if (partes.length !== 3) return null;
-            // PostgreSQL espera formato YYYY-MM-DD
             return `${partes[2]}-${partes[1]}-${partes[0]}`;
         };
 
         if (tarea.portal === 'FORCE') {
+            console.log(`🚀 [Recarga][ID: ${tarea.id}] Ejecutando lógica FORCE...`);
             const resultado = await validarForce(page, tarea.numero, tarea.user_id, tarea.id);
             const nuevoEstado = (resultado && resultado.tipo === 'COMPLETADO') ? 'COMPLETADO' : 'RECARGA_PENDIENTE_REGISTRO';
             
-            // CORRECCIÓN: Uso de $1..$7 y connection.query
+            console.log(`💾 [Recarga][ID: ${tarea.id}] Actualizando BD a estado: ${nuevoEstado}`);
             await connection.query(`
                 UPDATE public.cola_tareas 
                 SET estado = $1, iccid = $2, linea_registrada = $3, fecha_recarga = $4, primer_evento = $5, resultado = $6 
@@ -131,50 +135,57 @@ async function manejarRecargas(tarea, connection) {
                     tarea.id
                 ]
             );
+            console.log(`✅ [Recarga][ID: ${tarea.id}] Proceso FORCE finalizado exitosamente.`);
         } else {
-            // ... lógica de Telcel ...
+            console.log(`🚀 [Recarga][ID: ${tarea.id}] Ejecutando lógica TELCEL...`);
             await ejecutarLoginTelcel(page, tarea.user_id);
+            
+            console.log(`🔍 [Recarga][ID: ${tarea.id}] Navegando a datos de línea...`);
             const resultado = await hacerClicEnDatosLinea(page, tarea.user_id, tarea.numero);
             
-            // CORRECCIÓN: Uso de $1, $2 y connection.query
+            console.log(`💾 [Recarga][ID: ${tarea.id}] Actualizando BD a COMPLETADO...`);
             await connection.query(`
                 UPDATE public.cola_tareas SET estado = 'COMPLETADO', resultado = $1 WHERE id = $2`, 
                 [JSON.stringify(resultado), tarea.id]
             );
+            console.log(`✅ [Recarga][ID: ${tarea.id}] Proceso TELCEL finalizado exitosamente.`);
         }
     } catch (e) {
-        console.error("❌ Error grave en manejarRecargas:", e);
+        console.error(`❌ [Recarga][ID: ${tarea.id}] Error grave durante la ejecución:`, e.message);
         if (tarea && tarea.id) {
-            // CORRECCIÓN: Uso de $1, $2 y connection.query
+            console.log(`💾 [Recarga][ID: ${tarea.id}] Reportando error a BD...`);
             await connection.query(
                 "UPDATE public.cola_tareas SET estado = 'ERROR', resultado = $1 WHERE id = $2", 
-                [e.message, tarea.id]
+                [e.message.substring(0, 255), tarea.id]
             );
         }
     }
 }
-
 //-- VALIDA FORCE ----------------> LA PRIMER CONSULTA 
 
-
 async function validarForce(page, numero, userId, tareaId) {
-    console.log(`🚀 Iniciando proceso para número: ${numero} (Tarea: ${tareaId})`);
+    console.log(`🚀 [FORCE][ID: ${tareaId}] Iniciando proceso para número: ${numero}`);
 
     try {
         // 1. Navegar a la página
+        console.log(`🌐 [FORCE][ID: ${tareaId}] Navegando a force.mmoviles.com...`);
         await page.goto('https://force.mmoviles.com/login', { waitUntil: 'networkidle2', timeout: 30000 });
+        console.log(`✅ [FORCE][ID: ${tareaId}] Página cargada.`);
 
         // 2. Escribir número
-        await page.waitForSelector('#iccid_info', { visible: true });
+        console.log(`⌨️ [FORCE][ID: ${tareaId}] Esperando selector #iccid_info...`);
+        await page.waitForSelector('#iccid_info', { visible: true, timeout: 10000 });
+        
         await page.evaluate(() => document.querySelector('#iccid_info').value = '');
         await page.type('#iccid_info', String(numero));
-        console.log("✅ Número escrito.");
+        console.log(`✅ [FORCE][ID: ${tareaId}] Número ${numero} escrito correctamente.`);
 
         // 3. Clic al botón Buscar
+        console.log(`🖱️ [FORCE][ID: ${tareaId}] Haciendo clic en #button_info...`);
         await page.click('#button_info');
-        console.log("🔍 Clic en Buscar, esperando resultados...");
 
         // 4. Esperar resultados
+        console.log(`⏳ [FORCE][ID: ${tareaId}] Esperando respuesta del servidor...`);
         await page.waitForFunction(
             () => {
                 const el = document.querySelector('#iccid_response');
@@ -182,40 +193,43 @@ async function validarForce(page, numero, userId, tareaId) {
             },
             { timeout: 20000 }
         );
+        console.log(`✅ [FORCE][ID: ${tareaId}] Resultados recibidos.`);
 
         // 5. Extraer valores
         const resultados = await page.evaluate(() => {
             return {
-                iccid: document.querySelector('#iccid_response').value,
-                numero: document.querySelector('#numero_response').value
+                iccid: document.querySelector('#iccid_response')?.value || 'N/A',
+                numero: document.querySelector('#numero_response')?.value || 'N/A',
+                tipo: 'COMPLETADO'
             };
         });
 
-        console.log("✨ Resultados obtenidos:", resultados);
+        console.log(`✨ [FORCE][ID: ${tareaId}] Extracción exitosa:`, JSON.stringify(resultados));
 
-        // 6. Actualizar Base de Datos (USANDO .query y $1, $2)
+        // 6. Actualizar Base de Datos
+        console.log(`💾 [FORCE][ID: ${tareaId}] Guardando resultado en BD...`);
         await pool.query(
             "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
             ['COMPLETADO', JSON.stringify(resultados), tareaId]
         );
-
+        
+        console.log(`🏁 [FORCE][ID: ${tareaId}] Proceso finalizado con éxito.`);
         return resultados;
 
     } catch (error) {
-        console.error("❌ Error en validarForce:", error.message);
+        console.error(`❌ [FORCE][ID: ${tareaId}] Error en la ejecución:`, error.message);
         
-        // 7. Registrar error en BD (USANDO .query y $1, $2)
+        // 7. Registrar error en BD
         if (tareaId) {
+            console.log(`💾 [FORCE][ID: ${tareaId}] Reportando error a la base de datos.`);
             await pool.query(
                 "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
                 ['ERROR', error.message.substring(0, 255), tareaId]
-            );
+            ).catch(err => console.error(`🚨 [FORCE][ID: ${tareaId}] Fallo crítico al actualizar error en BD:`, err.message));
         }
         throw error;
     }
 }
-
-
 
 
 // 1. HERRAMIENTA TELCEL (Requiere Login)
