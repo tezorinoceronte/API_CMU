@@ -642,9 +642,7 @@ function renderizarQR(item) {
 //------------------------------------------------
 let promesaUsuario = null;
 let ID_USUARIO_ACTUAL = null;
-//-- parte de validarforce
-async function cargarIdUsuario() {
-    // Si ya se está cargando o ya se cargó, devolvemos la promesa existente
+//-- parte de validarforceasync function cargarIdUsuario() {
     if (promesaUsuario) return promesaUsuario;
 
     promesaUsuario = (async () => {
@@ -653,19 +651,20 @@ async function cargarIdUsuario() {
             const res = await fetch(`${API_URL}/auth/me`, { 
                 headers: { 'Authorization': 'Bearer ' + token }
             });
-            const data = await res.json();
             
-            if (data.success) {
-                ID_USUARIO_ACTUAL = data.id;
-                return ID_USUARIO_ACTUAL;
-            } else {
-                window.location.href = '/login.html';
+            // Primero verificamos si la respuesta es OK
+            if (!res.ok) {
+                console.warn("No se pudo obtener el usuario. Código:", res.status);
+                return null; // O redirige al login aquí
             }
+
+            const data = await res.json();
+            ID_USUARIO_ACTUAL = data.id;
+            return ID_USUARIO_ACTUAL;
         } catch (e) {
             console.error("Error al obtener ID:", e);
         }
     })();
-
     return promesaUsuario;
 }
 
