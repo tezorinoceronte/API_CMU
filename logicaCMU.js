@@ -887,68 +887,30 @@ async function manejarInicioSesion(page, tarea) {
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
 
-async function manejarToken(page, tarea, connection) {
-    console.log("🎟️ Procesando Token...");
-    const res = await inyectarTokenYValidar(page, tarea.id, tarea.numero);
-    
-    if (res.error) {
-        // CORRECCIÓN PG: Uso de $1, $2 y .query()
-        await connection.query("UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", ['FALLO_TOKEN', res.error, tarea.id]);
-        return false;
-    }
-    
-    // CORRECCIÓN PG: Uso de $1, $2 y .query()
-    await connection.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['GENERANDO_QR', tarea.id]);
-    return true;
-}
-
-async function inyectarTokenYValidar(page, tareaId, numero) {
-    // 1. Obtener token fresco
-    // CORRECCIÓN PG: Uso de .query(), acceso a result.rows[0]
-    const result = await pool.query("SELECT token FROM public.cola_tareas WHERE id = $1", [tareaId]);
-    const token = result.rows[0]?.token;
-
-    if (!token) return { error: "Token no encontrado en BD." };
-
-    const selectorToken = 'input[id*="token"]';
-    const selectorBoton = '#formRegistro\\:j_id_2y';
-
-    // 2. Limpiar input y luego inyectar el nuevo valor
-    await page.evaluate((sel, val) => {
-        const input = document.querySelector(sel);
-        if (input) {
-            input.value = ""; // Limpieza profunda
-            input.value = val;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-            input.dispatchEvent(new Event('blur', { bubbles: true }));
-        }
-    }, selectorToken, token);
-
-    console.log("🖱️ Clic en Validar...");
-    await page.click(selectorBoton);
-    
-    // 3. Espera de validación
-    console.log("⏳ Esperando 5 segundos para procesar validación...");
-    await new Promise(r => setTimeout(r, 5000));
-
-    // 4. Verificar error en pantalla
-    const mensajeError = await page.evaluate(() => {
-        const el = document.querySelector('span[style*="color: red"]');
-        return el ? el.innerText.trim() : null;
-    });
-
-    if (mensajeError) {
-        // --- CORRECCIÓN CRÍTICA ---
-        // Al fallar, ponemos el token en NULL en la base de datos.
-        // CORRECCIÓN PG: Uso de .query() y $1, $2
-        await pool.query("UPDATE public.cola_tareas SET token = NULL WHERE id = $1", [tareaId]);
+async function manejarToken(page, tarea, client) {
+    let browser = page.browser(); // Obtenemos el navegador de la página actual
+    try {
+        console.log(`🔑 [TOKEN] Iniciando validación para tarea ${tarea.id}`);
         
-        return { error: mensajeError };
+        // ... TU LÓGICA AQUÍ ...
+        // (Si aquí hay un error, el código saltará al catch)
+        
+    } catch (error) {
+        console.error(`❌ [TOKEN] Error fatal:`, error.message);
+        throw error; // Lanzamos el error para que cicloWorker lo capture y lo ponga en la BD
+    } finally {
+        // ESTO ES LO QUE TE FALTA:
+        // Si quieres cerrar el navegador tras usarlo, hazlo aquí.
+        // Si prefieres mantener la sesión, al menos asegúrate de que el proceso no esté "colgado".
+        if (browser) {
+            console.log(`🧹 [TOKEN] Asegurando limpieza de navegador para ${tarea.id}`);
+            // Solo cierra si realmente quieres terminar la sesión tras el token
+            // await browser.close(); 
+        }
     }
-    
-    return { success: true };
 }
+
+
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
