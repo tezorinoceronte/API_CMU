@@ -30,7 +30,12 @@ if (numInput && btnValidar) {
 
 // --- FUNCIÓN PRINCIPAL DE CONSULTA ---
 // --- FUNCIÓN PRINCIPAL DE CONSULTA (CON LOGS DE DEPURACIÓN) ---
-async function validarforce() {
+
+
+ 
+
+window.validarforce = async function() {
+    console.log("La función se ha ejecutado");
     const input = document.getElementById('numInput');
     const btn = document.getElementById('btnValidar');
     const alertBox = document.getElementById('alertBox');
@@ -118,6 +123,7 @@ async function validarforce() {
                 console.error("❌ [ERROR] Polling fallido:", err); 
             }
         }, 2000);
+        };
 
     } catch (e) {
         console.error("❌ [ERROR] Capturado en validarforce:", e);
@@ -127,7 +133,9 @@ async function validarforce() {
         btn.disabled = false;
         loader.style.display = 'none';
     }
-}
+
+
+
 function procesarResultadoExitoso(resultado) {
     if (resultado && resultado.iccid) {
         document.getElementById('panelConsulta').style.display = 'none';
