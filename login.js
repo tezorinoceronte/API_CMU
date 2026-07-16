@@ -1,28 +1,27 @@
 router.post('/login', async (req, res) => {
     const { correo, password } = req.body;
-    
-    // Conexión rústica (aquí mismo)
     const { Pool } = require('pg');
+
+    // CONEXIÓN DIRECTA (Sin variables de entorno)
     const pool = new Pool({
-        connectionString: process.env.SUPABASE_URL,
+        connectionString: "postgresql://postgres.srfsdnphgdwrqjggcwfc:xSHxtYhf6rh6uXVx@aws-0-us-east-1.pooler.supabase.com:6543/postgres",
         ssl: { rejectUnauthorized: false },
-        family: 6
+        family: 4
     });
 
     try {
-        console.log("Intentando consulta para:", correo);
+        console.log("Intentando consulta directa a Supabase...");
         const query = 'SELECT * FROM public.usuarios_act_cmu WHERE correo = $1';
         const result = await pool.query(query, [correo]);
         
-        // Cerramos el pool inmediatamente después de la consulta
-        await pool.end(); 
+        await pool.end(); // Cerramos conexión
 
         if (result.rows.length === 0) {
-            return res.status(401).json({ success: false, message: "Usuario no existe" });
+            return res.status(401).json({ success: false, message: "Usuario no encontrado" });
         }
 
         const user = result.rows[0];
-        const bcrypt = require('bcrypt');
+        const bcrypt = require('bcryptjs'); // Usando bcryptjs para mayor compatibilidad
         const match = await bcrypt.compare(password, user.password_hash);
         
         if (!match) {
@@ -30,14 +29,13 @@ router.post('/login', async (req, res) => {
         }
 
         const jwt = require('jsonwebtoken');
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'dev_key', { expiresIn: '24h' });
+        const token = jwt.sign({ id: user.id }, 'clave_super_secreta_2026', { expiresIn: '24h' });
         
-        res.json({ success: true, token });
+        return res.json({ success: true, token });
 
     } catch (err) {
-        console.error("ERROR RÚSTICO:", err);
-        // ESTA LÍNEA TE DIRÁ LA VERDAD EN EL NAVEGADOR
-        res.status(500).json({ 
+        console.error("ERROR CRÍTICO:", err);
+        return res.status(500).json({ 
             success: false, 
             message: "Fallo real: " + err.message,
             stack: err.stack 
