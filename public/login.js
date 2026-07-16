@@ -2,7 +2,21 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { pool } = require('./cola');
+const { Pool } = require('pg');
+
+// Configuración robusta para evitar el error de red1
+const pool = new Pool({
+  connectionString: process.env.SUPABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  },
+  // Forzar IPv4 para evitar el error ENETUNREACH
+  family: 4, 
+  // Aumentar tiempos de espera para entornos en la nube
+  connectionTimeoutMillis: 15000,
+  idleTimeoutMillis: 30000,
+  max: 5 // Reducir conexiones simultáneas para evitar saturación
+});
 
 const JWT_SECRET = process.env.JWT_SECRET || 'clave_super_secreta_2026';
 
