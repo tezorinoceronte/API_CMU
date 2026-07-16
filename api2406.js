@@ -1,4 +1,13 @@
-const { Pool } = require('pg');
+
+
+
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const fs = require('fs-extra');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+ const { Pool } = require('pg');
 const pool = new Pool({
   connectionString: process.env.SUPABASE_URL,
   ssl: {
@@ -12,15 +21,6 @@ const pool = new Pool({
   max: 5 // Reducir conexiones simultáneas para evitar saturación
 });
 console.log(`🔍 [DB] Intentando conectar a: ${process.env.SUPABASE_URL ? "-------API CONECTADA A DB" : "¡ERROR! URL NO ENCONTRADA"}`);
-
-
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const fs = require('fs-extra');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
- 
 
 const app = express();
 const PORT = process.env.PORT || 10000;
