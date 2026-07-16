@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const pool = require('./cola'); // IMPORTA EL POOL CENTRALIZADO
 
+// IMPORTA el pool desde tu archivo cola.js en lugar de crearlo aquí
+const pool = require('./cola');
 router.post('/login', async (req, res) => {
     const { correo, password } = req.body;
 
