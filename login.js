@@ -25,35 +25,28 @@ router.post('/login', async (req, res) => {
     }
 
     try {
-        const [rows] = await pool.execute('SELECT * FROM public.usuarios_act_cmu WHERE correo = ?', [correo]);
-        const user = rows[0];
-        // CORRECCIÓN 1: Usar .query en lugar de .execute
-        // CORRECCIÓN 2: Usar $1 en lugar de ?
+        // Ejecutamos la consulta una sola vez
         const result = await pool.query('SELECT * FROM public.usuarios_act_cmu WHERE correo = $1', [correo]);
-        
-        // CORRECCIÓN 3: Extraer 'rows' del resultado de pg
         const user = result.rows[0];
 
+        // Verificamos si existe y comparamos contraseña
         if (!user || !(await bcrypt.compare(password, user.password_hash))) {
             return res.status(401).json({ success: false, message: "Credenciales incorrectas" });
         }
 
-        const token = jwt.sign({ id: user.id }, 'clave_secreta_2026', { expiresIn: '24h' });
-        res.json({ success: true, token: token }); 
+        // Generamos el token una sola vez
         const token = jwt.sign(
             { id: user.id, nombre: user.nombre_completo, rol: user.rol }, 
             JWT_SECRET, 
             { expiresIn: '24h' }
         );
 
-        console.log("✅ [LOGIN] Usuario autenticado, token generado.");
-        res.json({ success: true, token: token });
+        console.log("✅ [LOGIN] Usuario autenticado:", correo);
+        return res.json({ success: true, token: token });
 
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: "Error interno" });
         console.error("❌ ERROR EN LOGIN:", err);
-        res.status(500).json({ success: false, message: "Error interno del servidor" });
+        return res.status(500).json({ success: false, message: "Error interno del servidor" });
     }
 });
 
