@@ -3,8 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>Acceso al Sistema</title>
-</head>
-<body>
     <style>
         body { font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f4f7f6; margin: 0; }
         .login-card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; text-align: center; }
@@ -13,6 +11,8 @@
         .btn-logout { width: 100%; padding: 10px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px; }
         #mensaje { margin-top: 15px; font-size: 14px; padding: 10px; border-radius: 5px; display: none; }
     </style>
+</head>
+<body>
 
     <div class="login-card">
         <h3>Iniciar Sesión</h3>
@@ -24,15 +24,13 @@
     </div>
 
 <script>
-// La URL base detecta automáticamente el dominio actual (Render o localhost)
-const API_URL = window.location.origin;
+ // Pon aquí tu URL real de Render sin la diagonal al final
+ const API_URL = 'https://api-cmu-2.onrender.com';
 
 async function login() {
     const correo = document.getElementById('correo').value;
     const password = document.getElementById('password').value;
     const msg = document.getElementById('mensaje');
-
-    console.log("🚀 Iniciando petición a:", `${API_URL}/auth/login`);
 
     try {
         const res = await fetch(`${API_URL}/auth/login`, {
@@ -41,41 +39,32 @@ async function login() {
             body: JSON.stringify({ correo, password })
         });
 
-        // Intentamos parsear, pero verificamos si la respuesta es JSON primero
-        const data = await res.json().catch(() => ({}));
+        const data = await res.json();
 
-        if (res.ok && data.success) {
+        if (data.success) {
             localStorage.setItem('token', data.token); 
-            console.log("✅ Autenticación exitosa.");
             window.location.href = '/autorecarga.html';
         } else {
-            // Manejo de errores específicos (401, 500, etc.)
-            const errorMsg = data.message || (res.status === 500 ? "Error interno del servidor" : "Credenciales incorrectas");
-            msg.innerText = "Error: " + errorMsg;
+            msg.innerText = data.message || "Error al iniciar sesión.";
             msg.style.display = 'block';
-            console.warn("⚠️ Fallo:", errorMsg);
         }
     } catch (error) {
         console.error("❌ Error de red:", error);
-        msg.innerText = "Error crítico de conexión. Verifica la consola.";
+        msg.innerText = "Error crítico de conexión.";
         msg.style.display = 'block';
     }
 }
 
-// Función de logout simplificada
 function logout() {
     localStorage.removeItem('token');
     window.location.href = '/login.html';
 }
 
-// Lógica de protección de ruta: Redirección inmediata si ya hay sesión
-document.addEventListener('DOMContentLoaded', () => {
-    const token = localStorage.getItem('token');
-    if (token && window.location.pathname.endsWith('login.html')) {
-        console.log("ℹ️ Sesión activa detectada, redirigiendo...");
-        window.location.href = '/autorecarga.html';
-    }
-});
+// Lógica de protección: Si ya está logueado, enviar al sistema
+const token = localStorage.getItem('token');
+if (token && window.location.pathname === '/login.html') {
+    window.location.href = '/autorecarga.html';
+}
 </script>
 </body>
 </html>
