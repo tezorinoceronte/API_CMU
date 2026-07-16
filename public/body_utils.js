@@ -646,21 +646,29 @@ let ID_USUARIO_ACTUAL = null;
 
 async function cargarIdUsuario() {
     try {
+        const token = localStorage.getItem('token');
+        if (!token) throw new Error("Token no encontrado en localStorage");
+
         const res = await fetch(`${API_URL}api/auth/me`, { 
-            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+            headers: { 'Authorization': 'Bearer ' + token }
         });
-        // Verificamos si la respuesta es realmente JSON antes de parsear
-        const contentType = res.headers.get("content-type");
-        if (contentType && contentType.indexOf("application/json") !== -1) {
-            const data = await res.json();
-            if (data.success) return data.id;
+
+        // IMPORTANTE: Aquí está el truco para ver qué pasó
+        if (!res.ok) {
+            const errorText = await res.text(); // Capturamos el error real del servidor
+            throw new Error(`Servidor respondió con ${res.status}: ${errorText}`);
         }
-        throw new Error("No es JSON");
+
+        const data = await res.json();
+        if (data.success) return data.id;
+        
+        throw new Error("Respuesta no exitosa: " + JSON.stringify(data));
+        
     } catch (e) {
-        console.error("Sesión inválida o error de red");
-        return null; // En lugar de redirigir bruscamente
+        // Ahora sí verás el motivo real en la consola
+        console.error("❌ [cargarIdUsuario] Fallo al obtener ID:", e.message);
+        return null; 
     }
-}
 cargarIdUsuario();
 
 function obtenerIdUsuario() {
