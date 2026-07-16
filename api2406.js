@@ -1,10 +1,26 @@
+const { Pool } = require('pg');
+const pool = new Pool({
+  connectionString: process.env.SUPABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  },
+  // Forzar IPv4 para evitar el error ENETUNREACH
+  family: 4, 
+  // Aumentar tiempos de espera para entornos en la nube
+  connectionTimeoutMillis: 15000,
+  idleTimeoutMillis: 30000,
+  max: 5 // Reducir conexiones simultáneas para evitar saturación
+});
+onsole.log(`🔍 [DB] Intentando conectar a: ${process.env.SUPABASE_URL ? "-------API CONECTADA A DB" : "¡ERROR! URL NO ENCONTRADA"}`);
+
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs-extra');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const { pool } = require('./cola'); 
+ 
 
 const app = express();
 const PORT = process.env.PORT || 10000;
