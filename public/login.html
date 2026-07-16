@@ -24,14 +24,15 @@
     </div>
 
 <script>
-const API_URL = ''; // Apunta al mismo dominio
+// La URL base detecta automáticamente el dominio actual (Render o localhost)
+const API_URL = window.location.origin;
 
 async function login() {
     const correo = document.getElementById('correo').value;
     const password = document.getElementById('password').value;
     const msg = document.getElementById('mensaje');
 
-    console.log("🚀 Iniciando petición a:", window.location.origin + '/auth/login');
+    console.log("🚀 Iniciando petición a:", `${API_URL}/auth/login`);
 
     try {
         const res = await fetch(`${API_URL}/auth/login`, {
@@ -40,39 +41,41 @@ async function login() {
             body: JSON.stringify({ correo, password })
         });
 
-        // Capturamos el resultado del servidor
-        const data = await res.json();
-        console.log("📡 Respuesta recibida (Estado " + res.status + "):", data);
+        // Intentamos parsear, pero verificamos si la respuesta es JSON primero
+        const data = await res.json().catch(() => ({}));
 
         if (res.ok && data.success) {
             localStorage.setItem('token', data.token); 
-            console.log("✅ Autenticación exitosa. Token guardado.");
+            console.log("✅ Autenticación exitosa.");
             window.location.href = '/autorecarga.html';
         } else {
-            // Mostrar error específico que viene del servidor (ej: "Credenciales incorrectas")
-            msg.innerText = "Error: " + (data.message || "Usuario o contraseña inválidos.");
+            // Manejo de errores específicos (401, 500, etc.)
+            const errorMsg = data.message || (res.status === 500 ? "Error interno del servidor" : "Credenciales incorrectas");
+            msg.innerText = "Error: " + errorMsg;
             msg.style.display = 'block';
-            console.warn("⚠️ Error de autenticación:", data.message);
+            console.warn("⚠️ Fallo:", errorMsg);
         }
     } catch (error) {
-        // ERROR DE CONEXIÓN (El "Failed to fetch")
-        console.error("❌ Error de red / Fetch:", error);
-        msg.innerText = "Error crítico: No se pudo conectar al servidor. Revisa la consola (F12).";
+        console.error("❌ Error de red:", error);
+        msg.innerText = "Error crítico de conexión. Verifica la consola.";
         msg.style.display = 'block';
     }
 }
 
-async function logout() {
+// Función de logout simplificada
+function logout() {
     localStorage.removeItem('token');
     window.location.href = '/login.html';
 }
 
-// CORRECCIÓN LÓGICA: Si ya existe token, debe ir a la app, no al login
-const token = localStorage.getItem('token');
-if (token && window.location.pathname.includes('login.html')) {
-    console.log("ℹ️ Token detectado, redirigiendo a autorecarga...");
-    window.location.href = '/autorecarga.html';
-}
+// Lógica de protección de ruta: Redirección inmediata si ya hay sesión
+document.addEventListener('DOMContentLoaded', () => {
+    const token = localStorage.getItem('token');
+    if (token && window.location.pathname.endsWith('login.html')) {
+        console.log("ℹ️ Sesión activa detectada, redirigiendo...");
+        window.location.href = '/autorecarga.html';
+    }
+});
 </script>
 </body>
 </html>
