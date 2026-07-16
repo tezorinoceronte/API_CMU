@@ -130,7 +130,7 @@ async function manejarRecargas(tarea, connection) {
             
             // CORRECCIÓN: Uso de $1..$7 y connection.query
             await connection.query(`
-                UPDATE public.reas 
+                UPDATE public.cola_tareas 
                 SET estado = $1, iccid = $2, linea_registrada = $3, fecha_recarga = $4, primer_evento = $5, resultado = $6 
                 WHERE id = $7`, 
                 [
@@ -150,7 +150,7 @@ async function manejarRecargas(tarea, connection) {
             
             // CORRECCIÓN: Uso de $1, $2 y connection.query
             await connection.query(`
-                UPDATE public.reas SET estado = 'COMPLETADO', resultado = $1 WHERE id = $2`, 
+                UPDATE public.cola_tareas SET estado = 'COMPLETADO', resultado = $1 WHERE id = $2`, 
                 [JSON.stringify(resultado), tarea.id]
             );
         }
@@ -159,7 +159,7 @@ async function manejarRecargas(tarea, connection) {
         if (tarea && tarea.id) {
             // CORRECCIÓN: Uso de $1, $2 y connection.query
             await connection.query(
-                "UPDATE public.reas SET estado = 'ERROR', resultado = $1 WHERE id = $2", 
+                "UPDATE public.cola_tareas SET estado = 'ERROR', resultado = $1 WHERE id = $2", 
                 [e.message, tarea.id]
             );
         }
