@@ -69,13 +69,11 @@ async function obtenerSesionCompleta(userId, url) {
         launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
     }
 
-    const browser = await puppeteer.launch({
-        headless: "new",
-        args: launchArgs,
-        // Usamos la variable de entorno o fallback a chromium
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser',
-        userDataDir: userDataDir 
-    });
+const browser = await puppeteer.launch({
+    headless: "new",
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH, // Usará /usr/bin/chromium
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+});
 
     return browser;
 }
