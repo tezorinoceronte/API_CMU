@@ -36,83 +36,98 @@ async function validarforce() {
     const alertBox = document.getElementById('alertBox');
     const loader = document.getElementById('loader');
 
-    if (!input.value) return alert("Ingresa un número.");
+    if (!input.value) {
+        alert("Ingresa un número.");
+        return;
+    }
 
+    // Preparación de UI
     btn.disabled = true;
     loader.style.display = 'block';
+    alertBox.style.display = 'block';
     alertBox.innerHTML = "⏳ Enviando tarea al sistema...";
 
-    // LOG: Ver qué token se está enviando
+    // 1. Obtener Token y verificar URL
     const token = localStorage.getItem('token');
-    console.log("Token enviado en la petición:", token);
+    const url = `${API_URL}/api/solicitar-consulta`;
+    
+    console.log("🔍 [DEBUG] Iniciando validarforce");
+    console.log("🔍 [DEBUG] API_URL:", API_URL);
+    console.log("🔍 [DEBUG] Token presente:", !!token);
+    console.log("🔍 [DEBUG] Haciendo POST a:", url);
 
     try {
-        const url = `${API_URL}/api/solicitar-consulta`;
-        console.log("Haciendo POST a:", url);
-
+        // 2. Realizar la petición Fetch
         const res = await fetch(url, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer ' + token 
             },
-            body: JSON.stringify({ numero: input.value, portal: 'FORCE', tipo: 'RECARGA' })
+            body: JSON.stringify({ 
+                numero: input.value, 
+                portal: 'FORCE', 
+                tipo: 'RECARGA' 
+            })
         });
 
-        // LOG: Estado de la respuesta HTTP
-        console.log("Estado HTTP recibido:", res.status);
+        console.log("🔍 [DEBUG] Estado HTTP recibido:", res.status);
 
-        // LOG: Leer como texto para ver si es HTML o JSON
+        // 3. Leer respuesta cruda para depuración
         const textoRespuesta = await res.text();
-        console.log("Cuerpo de la respuesta (Raw):", textoRespuesta);
+        console.log("🔍 [DEBUG] Cuerpo respuesta (Raw):", textoRespuesta);
 
-        // Intentar convertir a JSON después de ver el log
         let data;
         try {
             data = JSON.parse(textoRespuesta);
         } catch (e) {
-            console.error("Error al parsear JSON. ¿El servidor devolvió HTML?");
-            throw new Error("Respuesta inválida del servidor (posible error HTML). Revisa la consola.");
+            console.error("❌ [ERROR] No es JSON. ¿El servidor devolvió un error HTML?");
+            throw new Error("Respuesta inválida del servidor. Revisa la consola.");
         }
 
-        if (!res.ok) throw new Error(data.error || "Error al solicitar.");
+        if (!res.ok) {
+            throw new Error(data.error || `Error ${res.status}: Fallo en la solicitud.`);
+        }
 
-        console.log("Solicitud exitosa. ID Tarea:", data.tareaId);
-        alertBox.innerHTML = "✅ Solicitud #" + data.tareaId + ". Esperando...";
+        // 4. Si es exitoso, iniciar polling
+        console.log("✅ [DEBUG] Solicitud exitosa. ID Tarea:", data.tareaId);
+        alertBox.innerHTML = "✅ Solicitud #" + data.tareaId + ". Procesando...";
 
         const intervalo = setInterval(async () => {
             try {
                 const urlCheck = `${API_URL}/api/verificar-estado/${data.tareaId}`;
-                console.log("Consultando estado en:", urlCheck);
+                console.log("🔍 [DEBUG] Consultando estado en:", urlCheck);
                 
                 const check = await fetch(urlCheck, {
                     headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
                 });
                 
                 const resCheck = await check.json();
-                console.log("Estado recibido:", resCheck);
+                console.log("🔍 [DEBUG] Estado recibido:", resCheck);
 
                 if (resCheck.estado === 'RECARGA_PENDIENTE_REGISTRO' || resCheck.estado === 'COMPLETADO') {
                     clearInterval(intervalo);
-                    const resultado = (typeof resCheck.resultado === 'string') ? JSON.parse(resCheck.resultado) : resCheck.resultado;
-                    procesarResultadoExitoso(resultado);
+                    procesarResultadoExitoso(resCheck.resultado);
                     resetUI();
                 } else if (resCheck.estado === 'ERROR') {
                     clearInterval(intervalo);
-                    alertBox.innerHTML = "❌ Error en el proceso.";
+                    alertBox.innerHTML = "❌ Error en el proceso: " + (resCheck.mensaje || "Desconocido");
                     resetUI();
                 }
-            } catch (err) { console.error("Polling error:", err); }
+            } catch (err) { 
+                console.error("❌ [ERROR] Polling fallido:", err); 
+            }
         }, 2000);
+
     } catch (e) {
-        console.error("Error capturado en validarforce:", e);
+        console.error("❌ [ERROR] Capturado en validarforce:", e);
         alertBox.innerHTML = "❌ " + e.message;
-        resetUI();
+        
+        // Resetear botones solo si ocurrió un error
         btn.disabled = false;
+        loader.style.display = 'none';
     }
 }
-
-
 
 function procesarResultadoExitoso(resultado) {
     if (resultado && resultado.iccid) {
