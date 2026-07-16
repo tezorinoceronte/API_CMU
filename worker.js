@@ -1,5 +1,18 @@
+const { Pool } = require('pg');
 
-const { pool } = require('./cola');
+// Configuración robusta para evitar el error de red1
+const pool = new Pool({
+  connectionString: process.env.SUPABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  },
+  // Forzar IPv4 para evitar el error ENETUNREACH
+  family: 4, 
+  // Aumentar tiempos de espera para entornos en la nube
+  connectionTimeoutMillis: 15000,
+  idleTimeoutMillis: 30000,
+  max: 5 // Reducir conexiones simultáneas para evitar saturación
+});
 const logica = require('./logicaCMU');
 
 const { 
