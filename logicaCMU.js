@@ -89,16 +89,7 @@ async function obtenerSesionCompleta(userId, url) {
 
     // 3. LANZAMIENTO DEL NAVEGADOR (Adaptado para Render/Docker con ruta de respaldo obligatoria)
     console.log(`🚀 Lanzando nuevo navegador para: ${userId}`);
-    const launchArgs = [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--start-maximized',
-    '--disable-dev-shm-usage',
-    '--disable-gpu',
-    '--ignore-certificate-errors',
-    '--allow-running-insecure-content',
-    '--ignore-certificate-errors-spki-list'
-];
+ const launchArgs = ['--no-sandbox', '--start-maximized', '--disable-dev-shm-usage', '--disable-gpu'];
     if (config.useProxy) {
         launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
     }
