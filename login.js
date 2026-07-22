@@ -8,9 +8,9 @@ const jwt = require('jsonwebtoken');
 const pool = new Pool({
     host: 'aws-0-us-east-1.pooler.supabase.com',
     user: 'postgres.srfsdnphgdwrqjggcwfc',
-    password: 'TyZzGz0RsYJcMcqM', // Aquí pones tu contraseña tal cual
+    password: 'x4sARqQEyGO38oX2', // Aquí pones tu contraseña tal cual
     database: 'postgres',
-    port: 5432,
+    port: 6543,
     ssl: { rejectUnauthorized: false },
     family: 4
 });
