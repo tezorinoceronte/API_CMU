@@ -98,7 +98,7 @@ async function obtenerSesionCompleta(userId, url) {
 
 const browser = await puppeteer.launch({
     headless: "new",
-    executablePath: chromiumPath,
+    executablePath: chromiumPath || '/usr/bin/chromium',
     ignoreHTTPSErrors: true,
     args: launchArgs,
     userDataDir: userDataDir
