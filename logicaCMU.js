@@ -38,6 +38,17 @@ const config = {
     }
 };
 
+const possiblePaths = [
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/lib/chromium/chromium',
+    '/snap/bin/chromium'
+];
+
+let chromiumPath = possiblePaths.find(p => p && fs.existsSync(p));
+
+
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
     const path = require('path');
@@ -84,12 +95,12 @@ async function obtenerSesionCompleta(userId, url) {
         launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
     }
 
-    const browser = await puppeteer.launch({ 
-        headless: "new",
-       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-        args: launchArgs,
-        userDataDir: userDataDir
-    });
+const browser = await puppeteer.launch({
+    headless: "new",
+    executablePath: chromiumPath, // Usará la primera ruta real que encuentre
+    args: launchArgs,
+    userDataDir: userDataDir
+});
 
     const pageForce = await browser.newPage();
 
