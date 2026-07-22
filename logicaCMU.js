@@ -86,7 +86,7 @@ async function obtenerSesionCompleta(userId, url) {
 
     const browser = await puppeteer.launch({ 
         headless: "new",
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH, // <-- Esto evita el error de "Browser not found" en Render
+       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
         args: launchArgs,
         userDataDir: userDataDir
     });
