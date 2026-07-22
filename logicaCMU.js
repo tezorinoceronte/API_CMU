@@ -49,6 +49,7 @@ const possiblePaths = [
 
 let chromiumPath = possiblePaths.find(p => p && fs.existsSync(p));
 console.log(`--------------------------------------🧭 Chromium ejecutable detectado en: ${chromiumPath || "NO ENCONTRADO --🧭--🧭"}`);
+
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
     const path = require('path');
@@ -103,7 +104,7 @@ async function obtenerSesionCompleta(userId, url) {
 
     const browser = await puppeteer.launch({
         headless: "new",
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+        executablePath: chromiumPath || process.env.PUPPETEER_EXECUTABLE_PATH,
         ignoreHTTPSErrors: true,
         args: launchArgs,
         userDataDir: userDataDir
