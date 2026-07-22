@@ -52,39 +52,27 @@ console.log(`--------------------------------------🧭 Chromium ejecutable dete
 
 
 
+
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
-    const path = require('path');
-    const fs = require('fs');
+    const path = require('path'); // Asegurar requerir path si no está arriba
+    const fs = require('fs');     // Asegurar requerir fs si no está arriba
 
     // Definición unificada de la ruta
     const userDataDir = path.join(__dirname, 'tmp', 'sessions', String(userId));
     
-    // 1. LIMPIEZA DE SEGURIDAD (Sincronizada con disco y memoria RAM)
-    if (fs.existsSync(userDataDir)) {
+    // 1. LIMPIEZA DE SEGURIDAD (SingletonLock)
+    const lockFile = path.join(userDataDir, 'SingletonLock');
+    if (fs.existsSync(lockFile)) {
         try {
-            // Si el directorio físico existe, limpiamos primero cualquier sesión previa en memoria
-            if (sesiones.has(userId)) {
-                const sesionVieja = sesiones.get(userId);
-                if (sesionVieja.browser) await sesionVieja.browser.close().catch(() => {});
-                sesiones.delete(userId);
-            }
-            
-            fs.rmSync(userDataDir, { recursive: true, force: true });
-            console.log(`🧹 Directorio de sesión y caché en memoria limpiados para: ${userDataDir}`);
+            fs.unlinkSync(lockFile);
+            console.log("🔓 Bloqueo 'SingletonLock' eliminado.");
         } catch (e) {
-            console.log("⚠️ No se pudo limpiar el directorio completo, intentando solo el lock...");
-            const lockFile = path.join(userDataDir, 'SingletonLock');
-            if (fs.existsSync(lockFile)) {
-                try {
-                    fs.unlinkSync(lockFile);
-                    console.log("🔓 Bloqueo 'SingletonLock' eliminado.");
-                } catch (err) {}
-            }
+            console.log("⚠️ No se pudo borrar el bloqueo, pero intentaremos continuar.");
         }
     }
 
-    // 2. VERIFICACIÓN DE SESIÓN EXISTENTE (Mantener viva durante el flujo de pasos)
+    // 2. VERIFICACIÓN DE SESIÓN EXISTENTE
     if (sesiones.has(userId)) {
         const sesion = sesiones.get(userId);
         const inactivo = (ahora - sesion.lastUsed) > TIEMPO_EXPIRACION;
@@ -92,10 +80,10 @@ async function obtenerSesionCompleta(userId, url) {
                          sesion.pageForce && !sesion.pageForce.isClosed();
 
         if (estaVivo && !inactivo) {
-            console.log(`✅ Reutilizando página activa para el flujo del usuario: ${userId}`);
+            console.log(`✅ Sesión activa recuperada para: ${userId}`);
             sesion.lastUsed = ahora;
             await sesion.pageForce.bringToFront();
-            return sesion.pageForce; // Retorna la misma página activa donde va el proceso
+            return sesion.pageForce;
         } else {
             console.log(`🧹 Cerrando sesión obsoleta de: ${userId}`);
             if (sesion.browser) await sesion.browser.close().catch(() => {});
@@ -103,28 +91,22 @@ async function obtenerSesionCompleta(userId, url) {
         }
     }
 
-    // 3. LANZAMIENTO DEL NAVEGADOR (Adaptado para Render/Docker con Chromium del sistema)
+    // 3. LANZAMIENTO DEL NAVEGADOR
     console.log(`🚀 Lanzando nuevo navegador para: ${userId}`);
-    const launchArgs = [
-        '--no-sandbox', 
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage', 
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--window-size=1920,1080',
-        '--ignore-certificate-errors',
-        '--allow-insecure-localhost'
-    ];
+    const launchArgs = ['--no-sandbox', '--start-maximized'];
     
     if (config.useProxy) {
         launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
     }
 
-    const browser = await puppeteer.launch({
+    const browser = await puppeteer.launch({ 
         headless: "new",
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
-        ignoreHTTPSErrors: true,
-        args: launchArgs,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined, // Usa el del sistema en Docker, nativo en local
+        args: [
+            ...launchArgs,
+            '--disable-dev-shm-usage',
+            '--no-sandbox'
+        ],
         userDataDir: userDataDir
     });
 
@@ -137,18 +119,9 @@ async function obtenerSesionCompleta(userId, url) {
         });
     }
 
-    await pageForce.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
-    
-    try {
-        await pageForce.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-    } catch (error) {
-        console.log(`⚠️ Error al conectar con la URL (posible corte o puerto): ${error.message}`);
-        // Opcional: asegurar cierre si falla la navegación inicial para no colgar recursos
-        await browser.close().catch(() => {});
-        throw error;
-    }
+    await pageForce.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
+    await pageForce.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
 
-    // Verificación de IP a través del proxy
     try {
         const ip = await pageForce.evaluate(async () => {
             const response = await fetch('https://api.ipify.org?format=json');
@@ -163,6 +136,7 @@ async function obtenerSesionCompleta(userId, url) {
     sesiones.set(userId, { browser, pageForce, lastUsed: ahora });
     return pageForce;
 }
+
 
 
 async function manejarRecargas(tarea, connection) {
