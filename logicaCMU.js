@@ -49,7 +49,6 @@ const possiblePaths = [
 let chromiumPath = possiblePaths.find(p => p && fs.existsSync(p));
 console.log(`--------------------------------------🧭 Chromium ejecutable detectado en: ${chromiumPath || "NO ENCONTRADO --🧭--🧭"}`);
 
-
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
     const path = require('path');
@@ -69,7 +68,7 @@ async function obtenerSesionCompleta(userId, url) {
         }
     }
 
-    // 2. VERIFICACIÓN DE SESIÓN EXISTENTE
+    // 2. VERIFICACIÓN DE SESIÓN EXISTENTE (Mantener viva durante el flujo de pasos)
     if (sesiones.has(userId)) {
         const sesion = sesiones.get(userId);
         const inactivo = (ahora - sesion.lastUsed) > TIEMPO_EXPIRACION;
@@ -77,10 +76,10 @@ async function obtenerSesionCompleta(userId, url) {
                          sesion.pageForce && !sesion.pageForce.isClosed();
 
         if (estaVivo && !inactivo) {
-            console.log(`✅ Sesión activa recuperada para: ${userId}`);
+            console.log(`✅ Reutilizando página activa para el flujo del usuario: ${userId}`);
             sesion.lastUsed = ahora;
             await sesion.pageForce.bringToFront();
-            return sesion.pageForce;
+            return sesion.pageForce; // Retorna la misma página activa donde va el proceso
         } else {
             console.log(`🧹 Cerrando sesión obsoleta de: ${userId}`);
             if (sesion.browser) await sesion.browser.close().catch(() => {});
@@ -88,7 +87,7 @@ async function obtenerSesionCompleta(userId, url) {
         }
     }
 
-    // 3. LANZAMIENTO DEL NAVEGADOR (Adaptado para Render/Docker)
+    // 3. LANZAMIENTO DEL NAVEGADOR (Adaptado para Render/Docker con ruta de respaldo obligatoria)
     console.log(`🚀 Lanzando nuevo navegador para: ${userId}`);
     const launchArgs = ['--no-sandbox', '--start-maximized', '--disable-dev-shm-usage', '--disable-gpu'];
     
@@ -96,13 +95,13 @@ async function obtenerSesionCompleta(userId, url) {
         launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
     }
 
-const browser = await puppeteer.launch({
-    headless: "new",
-    executablePath: chromiumPath || '/usr/bin/chromium',
-    ignoreHTTPSErrors: true,
-    args: launchArgs,
-    userDataDir: userDataDir
-});
+    const browser = await puppeteer.launch({
+        headless: "new",
+        executablePath: chromiumPath || '/usr/bin/chromium',
+        ignoreHTTPSErrors: true,
+        args: launchArgs,
+        userDataDir: userDataDir
+    });
 
     const pageForce = await browser.newPage();
 
@@ -131,7 +130,6 @@ const browser = await puppeteer.launch({
     sesiones.set(userId, { browser, pageForce, lastUsed: ahora });
     return pageForce;
 }
-
 async function manejarRecargas(tarea, connection) {
     console.log(`🔄 [Recarga][ID: ${tarea.id}] Iniciando proceso de recarga para número: ${tarea.numero} | Portal: ${tarea.portal}`);
     
