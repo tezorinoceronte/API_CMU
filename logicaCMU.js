@@ -105,6 +105,7 @@ if (config.useProxy) {
 
 const browser = await puppeteer.launch({
     headless: "new",
+    executablePath: chromiumPath,
     args: launchArgs,
     userDataDir: userDataDir
 });
