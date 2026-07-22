@@ -127,7 +127,7 @@ async function obtenerSesionCompleta(userId, url) {
     }
 
     await pageForce.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
-    await pageForce.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+    await pageForce.goto(url, { waitUntil: 'networkidle2', timeout: 90000 });
 
     // Verificación de IP a través del proxy
     try {
