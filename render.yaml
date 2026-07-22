@@ -1,14 +1,6 @@
 services:
   - type: web
     name: mi-bot-activaciones
-    runtime: node
-    plan: starter # Se recomienda al menos 1GB o 2GB de RAM
-    buildCommand: npm install
-    startCommand: node app.js
-    envVars:
-      - key: NODE_VERSION
-        value: 18
-      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
-        value: 'true'
-      - key: PUPPETEER_EXECUTABLE_PATH
-        value: /usr/bin/google-chrome-stable
+    runtime: docker
+    dockerfilePath: ./dockerfile
+    plan: starter
