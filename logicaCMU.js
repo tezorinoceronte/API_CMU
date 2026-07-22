@@ -84,31 +84,31 @@ async function obtenerSesionCompleta(userId, url) {
         }
     }
 
-    // 3. LANZAMIENTO DEL NAVEGADOR
     console.log(`🚀 Lanzando nuevo navegador para: ${userId}`);
-    const launchArgs = ['--no-sandbox', '--start-maximized'];
-    
-    if (config.useProxy) {
-        launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
-    }
 
-    const browser = await puppeteer.launch({ 
-        headless: "new",
-    const launchArgs = [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--no-zygote',
-        '--single-process', // Vital en algunos entornos Docker slim para evitar fallos de IPC
-        '--window-size=1920,1080',
-        '--ignore-certificate-errors',
-        '--headless=new'
-    ];
-        userDataDir: userDataDir
-    });
+const launchArgs = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-accelerated-2d-canvas',
+    '--disable-gpu',
+    '--no-zygote',
+    '--single-process',
+    '--start-maximized',
+    '--window-size=1920,1080',
+    '--ignore-certificate-errors'
+];
 
+if (config.useProxy) {
+    launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
+}
+
+const browser = await puppeteer.launch({
+    headless: "new",
+    args: launchArgs,
+    userDataDir: userDataDir
+});
+  
     const pageForce = await browser.newPage();
 
     if (config.useProxy && config.proxyConfig.user) {
