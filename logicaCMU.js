@@ -47,6 +47,7 @@ const possiblePaths = [
 ];
 
 let chromiumPath = possiblePaths.find(p => p && fs.existsSync(p));
+console.log(`--------------------------------------🧭 Chromium ejecutable detectado en: ${chromiumPath || "NO ENCONTRADO --🧭--🧭"}`);
 
 
 async function obtenerSesionCompleta(userId, url) {
