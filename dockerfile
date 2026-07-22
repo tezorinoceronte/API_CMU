@@ -1,28 +1,34 @@
 FROM node:18-bullseye-slim
 
-# 1. Definir directorio de trabajo primero
 WORKDIR /app
 
-# 2. Instalar dependencias del sistema y Chromium nativo
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
     ca-certificates \
     procps \
     libxss1 \
-    chromium \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libgdk-pixbuf2.0-0 \
+    libgandalf-1.0-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libc6 \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. Configurar variables para que Puppeteer use el Chromium del sistema
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-
-# 4. Copiar package.json e instalar dependencias de Node
 COPY package*.json ./
 RUN npm install
+# Esto forzará a que Puppeteer descargue su Chromium compatible durante el despliegue
+RUN npx puppeteer browsers install chrome
 
-# 5. Copiar el resto del código fuente
 COPY . .
 
-# 6. Comando de arranque
 CMD ["node", "api2406.js"]
