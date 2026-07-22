@@ -40,42 +40,80 @@ async function obtenerSesionCompleta(userId, url) {
     const path = require('path');
     const fs = require('fs');
 
-    // 1. CARPETA ÚNICA DE SESIÓN (Definida una sola vez)
-    const userDataDir = path.join(__dirname, 'tmp', 'sessions', `${userId}-${ahora}`);
-
-    // 2. LIMPIEZA DE SEGURIDAD (SingletonLock)
+    // Definición unificada de la ruta
+    const userDataDir = path.join(__dirname, 'tmp', 'sessions', String(userId));
+    
+    // 1. LIMPIEZA DE SEGURIDAD (SingletonLock)
     const lockFile = path.join(userDataDir, 'SingletonLock');
     if (fs.existsSync(lockFile)) {
         try {
             fs.unlinkSync(lockFile);
             console.log("🔓 Bloqueo 'SingletonLock' eliminado.");
         } catch (e) {
-            console.log("⚠️ No se pudo borrar el bloqueo, intentaremos continuar.");
+            console.log("⚠️ No se pudo borrar el bloqueo, pero intentaremos continuar.");
         }
     }
 
-    // 3. LANZAMIENTO DEL NAVEGADOR
-    console.log(`🚀 Lanzando nuevo navegador único para: ${userId}`);
-    
-    const launchArgs = [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-zygote'
-    ];
+    // 2. VERIFICACIÓN DE SESIÓN EXISTENTE
+    if (sesiones.has(userId)) {
+        const sesion = sesiones.get(userId);
+        const inactivo = (ahora - sesion.lastUsed) > TIEMPO_EXPIRACION;
+        const estaVivo = sesion.browser?.process() !== null && 
+                         sesion.pageForce && !sesion.pageForce.isClosed();
 
+        if (estaVivo && !inactivo) {
+            console.log(`✅ Sesión activa recuperada para: ${userId}`);
+            sesion.lastUsed = ahora;
+            await sesion.pageForce.bringToFront();
+            return sesion.pageForce;
+        } else {
+            console.log(`🧹 Cerrando sesión obsoleta de: ${userId}`);
+            if (sesion.browser) await sesion.browser.close().catch(() => {});
+            sesiones.delete(userId);
+        }
+    }
+
+    // 3. LANZAMIENTO DEL NAVEGADOR (Adaptado para Render/Docker)
+    console.log(`🚀 Lanzando nuevo navegador para: ${userId}`);
+    const launchArgs = ['--no-sandbox', '--start-maximized', '--disable-dev-shm-usage', '--disable-gpu'];
+    
     if (config.useProxy) {
         launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
     }
 
-const browser = await puppeteer.launch({
-    headless: "new",
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH, // Usará /usr/bin/chromium
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-});
+    const browser = await puppeteer.launch({ 
+        headless: "new",
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH, // <-- Esto evita el error de "Browser not found" en Render
+        args: launchArgs,
+        userDataDir: userDataDir
+    });
 
-    return browser;
+    const pageForce = await browser.newPage();
+
+    if (config.useProxy && config.proxyConfig.user) {
+        await pageForce.authenticate({
+            username: config.proxyConfig.user,
+            password: config.proxyConfig.pass
+        });
+    }
+
+    await pageForce.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
+    await pageForce.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+
+    // Verificación de IP a través del proxy
+    try {
+        const ip = await pageForce.evaluate(async () => {
+            const response = await fetch('https://api.ipify.org?format=json');
+            const data = await response.json();
+            return data.ip;
+        });
+        console.log(`🌍 El bot está navegando desde la IP: ${ip}`);
+    } catch (e) {
+        console.log("⚠️ No se pudo verificar la IP a través del proxy.");
+    }
+
+    sesiones.set(userId, { browser, pageForce, lastUsed: ahora });
+    return pageForce;
 }
 
 async function manejarRecargas(tarea, connection) {
