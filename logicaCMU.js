@@ -97,9 +97,9 @@ async function obtenerSesionCompleta(userId, url) {
         launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
     }
 
-    const browser = await puppeteer.launch({ 
+const browser = await puppeteer.launch({ 
         headless: "new",
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined, // Usa el del sistema en Docker, nativo en local
+        executablePath: '/usr/bin/chromium', // Forzamos directamente la ruta nativa sin depender de process.env
         args: [
             ...launchArgs,
             '--disable-dev-shm-usage',
