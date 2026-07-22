@@ -94,8 +94,7 @@ async function obtenerSesionCompleta(userId, url) {
 
     const browser = await puppeteer.launch({ 
         headless: "new",
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium', // Ruta fija blindada para Render
-        args: [
+             args: [
             ...launchArgs,
             '--disable-dev-shm-usage',
             '--no-sandbox',
