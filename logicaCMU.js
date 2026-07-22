@@ -3,7 +3,7 @@ const { Pool } = require('pg');
 
 // Configuración robusta para evitar el error de red1
 const pool = new Pool({
-  connectionString: process.env.SUPABASE_URL,
+  connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
   },
@@ -14,7 +14,7 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
   max: 5 // Reducir conexiones simultáneas para evitar saturación
 });
-console.log(`🔍 [DB] Intentando conectar a: ${process.env.SUPABASE_URL ? "-------- BD logicaCMU CONFIGURADA" : "¡ERROR! URL NO ENCONTRADA"}`);
+console.log(`🔍 [DB] Intentando conectar a: ${process.env.DATABASE_URL ? "-------- BD logicaCMU CONFIGURADA" : "¡ERROR! URL NO ENCONTRADA"}`);
 
 const fs = require('fs-extra');
 const path = require('path');
