@@ -49,7 +49,6 @@ const possiblePaths = [
 
 let chromiumPath = possiblePaths.find(p => p && fs.existsSync(p));
 console.log(`--------------------------------------🧭 Chromium ejecutable detectado en: ${chromiumPath || "NO ENCONTRADO --🧭--🧭"}`);
-
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
     const path = require('path');
@@ -101,9 +100,18 @@ async function obtenerSesionCompleta(userId, url) {
         }
     }
 
-    // 3. LANZAMIENTO DEL NAVEGADOR (Adaptado para Render/Docker)
+    // 3. LANZAMIENTO DEL NAVEGADOR (Adaptado para Render/Docker con Chromium del sistema)
     console.log(`🚀 Lanzando nuevo navegador para: ${userId}`);
-    const launchArgs = ['--no-sandbox', '--start-maximized', '--disable-dev-shm-usage', '--disable-gpu'];
+    const launchArgs = [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage', 
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
+        '--window-size=1920,1080',
+        '--ignore-certificate-errors',
+        '--allow-insecure-localhost'
+    ];
     
     if (config.useProxy) {
         launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
@@ -111,7 +119,7 @@ async function obtenerSesionCompleta(userId, url) {
 
     const browser = await puppeteer.launch({
         headless: "new",
-        executablePath: chromiumPath || process.env.PUPPETEER_EXECUTABLE_PATH,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
         ignoreHTTPSErrors: true,
         args: launchArgs,
         userDataDir: userDataDir
@@ -126,8 +134,16 @@ async function obtenerSesionCompleta(userId, url) {
         });
     }
 
-    await pageForce.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
-    await pageForce.goto(url, { waitUntil: 'networkidle2', timeout: 90000 });
+    await pageForce.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+    
+    try {
+        await pageForce.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+    } catch (error) {
+        console.log(`⚠️ Error al conectar con la URL (posible corte o puerto): ${error.message}`);
+        // Opcional: asegurar cierre si falla la navegación inicial para no colgar recursos
+        await browser.close().catch(() => {});
+        throw error;
+    }
 
     // Verificación de IP a través del proxy
     try {
@@ -144,8 +160,6 @@ async function obtenerSesionCompleta(userId, url) {
     sesiones.set(userId, { browser, pageForce, lastUsed: ahora });
     return pageForce;
 }
-
-
 async function manejarRecargas(tarea, connection) {
     console.log(`🔄 [Recarga][ID: ${tarea.id}] Iniciando proceso de recarga para número: ${tarea.numero} | Portal: ${tarea.portal}`);
     
