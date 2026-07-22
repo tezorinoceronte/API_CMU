@@ -1,6 +1,6 @@
 const { Pool } = require('pg');
 const pool = new Pool({
-  connectionString: process.env.SUPABASE_URL,
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
   family: 4,
   max: 5
