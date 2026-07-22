@@ -51,8 +51,6 @@ let chromiumPath = possiblePaths.find(p => p && fs.existsSync(p));
 console.log(`--------------------------------------🧭 Chromium ejecutable detectado en: ${chromiumPath || "NO ENCONTRADO --🧭--🧭"}`);
 
 
-
-
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
     const path = require('path'); // Asegurar requerir path si no está arriba
@@ -120,7 +118,14 @@ async function obtenerSesionCompleta(userId, url) {
     }
 
     await pageForce.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
-    await pageForce.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+    
+    try {
+        await pageForce.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await new Promise(resolve => setTimeout(resolve, 3000));
+    } catch (error) {
+        console.log(`⚠️ Advertencia en navegación inicial: ${error.message}`);
+        await pageForce.reload({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+    }
 
     try {
         const ip = await pageForce.evaluate(async () => {
@@ -136,7 +141,6 @@ async function obtenerSesionCompleta(userId, url) {
     sesiones.set(userId, { browser, pageForce, lastUsed: ahora });
     return pageForce;
 }
-
 
 
 async function manejarRecargas(tarea, connection) {
