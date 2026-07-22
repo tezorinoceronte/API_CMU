@@ -49,6 +49,9 @@ const possiblePaths = [
 
 let chromiumPath = possiblePaths.find(p => p && fs.existsSync(p));
 console.log(`--------------------------------------🧭 Chromium ejecutable detectado en: ${chromiumPath || "NO ENCONTRADO --🧭--🧭"}`);
+
+
+
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
     const path = require('path');
@@ -160,6 +163,8 @@ async function obtenerSesionCompleta(userId, url) {
     sesiones.set(userId, { browser, pageForce, lastUsed: ahora });
     return pageForce;
 }
+
+
 async function manejarRecargas(tarea, connection) {
     console.log(`🔄 [Recarga][ID: ${tarea.id}] Iniciando proceso de recarga para número: ${tarea.numero} | Portal: ${tarea.portal}`);
     
