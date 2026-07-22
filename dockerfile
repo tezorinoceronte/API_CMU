@@ -14,7 +14,6 @@ RUN apt-get update && apt-get install -y \
     libcups2 \
     libdbus-1-3 \
     libgdk-pixbuf2.0-0 \
-    libgandalf-1.0-0 \
     libxcomposite1 \
     libxdamage1 \
     libxfixes3 \
@@ -26,8 +25,6 @@ RUN apt-get update && apt-get install -y \
 
 COPY package*.json ./
 RUN npm install
-# Esto forzará a que Puppeteer descargue su Chromium compatible durante el despliegue
-RUN npx puppeteer browsers install chrome
 
 COPY . .
 
