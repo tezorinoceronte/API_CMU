@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const pool = new Pool({
     host: 'aws-0-us-east-1.pooler.supabase.com',
     user: 'postgres.srfsdnphgdwrqjggcwfc',
-    password: 'x4sARqQEyGO38oX2', // Aquí pones tu contraseña tal cual
+    password: 'x4sARqQEyGO38oX2',
     database: 'postgres',
     port: 6543,
     ssl: { rejectUnauthorized: false },
@@ -22,40 +22,45 @@ const {
     limpiarSesionesInactivas, manejarQR_SMS
 } = logica;
 
-console.log(`🔍 [DB] Intentando conectar a: ${process.env.DATABASE_URL? "URL CONFIGURADA" : "¡ERROR! URL NO ENCONTRADA"}`);
 const WORKER_ID = process.env.WORKER_ID || 'WORKER_01';
 
 console.log(`🔍 [DB] Intentando conectar a: ${process.env.DATABASE_URL ? "URL CONFIGURADA" : "¡ERROR! URL NO ENCONTRADA"}`);
-
 
 async function cicloWorker() {
     let client;
     let tarea;
     try {
-        // 1. Intento de conexión
         client = await pool.connect();
         
-        const res = await client.query(
-            `SELECT * FROM public.cola_tareas 
-             WHERE worker_id = $1 
-             AND estado IN ('ASIGNADO', 'FALLO_TOKEN_ERROR2', 'PROCESANDO_ESIM', 'REINTENTAR_QR', 
-                            'ACT_ESIM_REINTENTAR', 'ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO', 'ACT_ESIM', 
-                            'ACT_FISICA', 'ACT_ESIM_EXITOSA_QR_1', 'VALIDANDO_TOKEN') 
-             LIMIT 1`, [WORKER_ID]
-        );
+        // --- CONSULTA ATÓMICA BLINDADA CONTRA CONCURRENCIA ---
+        // Selecciona y marca como 'PROCESANDO' en una sola instrucción atómica.
+        // Esto evita que dos hilos agarren la misma tarea al mismo tiempo.
+        const queryAtomica = `
+            WITH tarea_a_procesar AS (
+                SELECT id FROM public.cola_tareas 
+                WHERE worker_id = $1 
+                AND estado IN ('ASIGNADO', 'FALLO_TOKEN_ERROR2', 'PROCESANDO_ESIM', 'REINTENTAR_QR', 
+                              'ACT_ESIM_REINTENTAR', 'ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO', 'ACT_ESIM', 
+                              'ACT_FISICA', 'ACT_ESIM_EXITOSA_QR_1', 'VALIDANDO_TOKEN')
+                ORDER BY id ASC
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+            )
+            UPDATE public.cola_tareas 
+            SET estado = 'PROCESANDO'
+            FROM tarea_a_procesar
+            WHERE public.cola_tareas.id = tarea_a_procesar.id
+            RETURNING public.cola_tareas.*;
+        `;
+
+        const res = await client.query(queryAtomica, [WORKER_ID]);
 
         if (res.rows.length === 0) {
-            // Eliminado el client.release() de aquí para evitar conflictos con el finally
-            return; // Salida silenciosa si no hay tareas
+            return; // Salida silenciosa si no hay tareas pendientes
         }
 
         tarea = res.rows[0];
-        console.log(`🚀 [Worker: ${WORKER_ID}] Tarea encontrada: ${tarea.id} | Estado: ${tarea.estado}`);
-
-        // 2. Marcamos como procesando (solo si no es validación de token)
-        if (tarea.estado !== 'VALIDANDO_TOKEN' && tarea.estado !== 'FALLO_TOKEN') {
-            await client.query("UPDATE public.cola_tareas SET estado = $1 WHERE id = $2", ['PROCESANDO', tarea.id]);
-        }
+        console.log(`🚀 [Worker: ${WORKER_ID}] Tarea encontrada y bloqueada: ${tarea.id} | Estado anterior procesándose...`);
 
         // --- LÓGICA DE DELEGACIÓN ---
         if (tarea.tipo_tarea === 'RECARGA') {
@@ -112,7 +117,6 @@ async function cicloWorker() {
             }
         }
     } finally {
-        // La única forma de asegurar que no haya doble liberación
         if (client) {
             client.release();
         }
@@ -126,7 +130,6 @@ async function iniciarWorker() {
         await new Promise(resolve => setTimeout(resolve, 2000));
     }
 }
-
 
 console.log(`📡 [WOKER] ON`);
 iniciarWorker();
