@@ -1,13 +1,16 @@
 FROM node:18-bullseye-slim
 
-# 1. Ajuste de dependencias (necesarias para Chromium en Debian)
+# Instalar dependencias del sistema y Chromium de forma limpia
 RUN apt-get update && apt-get install -y \
-    chromium \
-    fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf \
+    wget \
+    gnupg \
+    ca-certificates \
+    procps \
     libxss1 \
+    chromium \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Variable de entorno crucial
+# Configurar variables para Puppeteer
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
@@ -16,6 +19,4 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 
-# 3. Importante: Asegúrate de que el comando de inicio sea tu archivo principal
-# Si tu archivo principal es api2406.js, cámbialo aquí
 CMD ["node", "api2406.js"]
