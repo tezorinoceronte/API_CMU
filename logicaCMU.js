@@ -50,11 +50,10 @@ const possiblePaths = [
 let chromiumPath = possiblePaths.find(p => p && fs.existsSync(p));
 console.log(`--------------------------------------🧭 Chromium ejecutable detectado en: ${chromiumPath || "NO ENCONTRADO --🧭--🧭"}`);
 
-
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
-    const path = require('path'); // Asegurar requerir path si no está arriba
-    const fs = require('fs');     // Asegurar requerir fs si no está arriba
+    const path = require('path');
+    const fs = require('fs');
 
     // Definición unificada de la ruta
     const userDataDir = path.join(__dirname, 'tmp', 'sessions', String(userId));
@@ -97,13 +96,14 @@ async function obtenerSesionCompleta(userId, url) {
         launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
     }
 
-const browser = await puppeteer.launch({ 
+    const browser = await puppeteer.launch({ 
         headless: "new",
-        executablePath: '/usr/bin/chromium', // Forzamos directamente la ruta nativa sin depender de process.env
+        executablePath: '/usr/bin/chromium', // Ruta fija blindada para el entorno de Render/Docker
         args: [
             ...launchArgs,
             '--disable-dev-shm-usage',
-            '--no-sandbox'
+            '--no-sandbox',
+            '--disable-setuid-sandbox'
         ],
         userDataDir: userDataDir
     });
@@ -119,14 +119,17 @@ const browser = await puppeteer.launch({
 
     await pageForce.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
     
+    // Navegación tolerante con timeout ampliado para evitar cortes prematuros (ERR_TIMED_OUT)
     try {
-        await pageForce.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        console.log(`🌐 Intentando conectar a: ${url}`);
+        await pageForce.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
         await new Promise(resolve => setTimeout(resolve, 3000));
     } catch (error) {
-        console.log(`⚠️ Advertencia en navegación inicial: ${error.message}`);
+        console.log(`⚠️ Timeout o corte de red detectado: ${error.message}`);
         await pageForce.reload({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
     }
 
+    // Verificación de IP a través del proxy o red actual
     try {
         const ip = await pageForce.evaluate(async () => {
             const response = await fetch('https://api.ipify.org?format=json');
@@ -141,7 +144,6 @@ const browser = await puppeteer.launch({
     sesiones.set(userId, { browser, pageForce, lastUsed: ahora });
     return pageForce;
 }
-
 
 async function manejarRecargas(tarea, connection) {
     console.log(`🔄 [Recarga][ID: ${tarea.id}] Iniciando proceso de recarga para número: ${tarea.numero} | Portal: ${tarea.portal}`);
@@ -211,17 +213,22 @@ async function validarForce(page, numero, userId, tareaId) {
     console.log(`🚀 [FORCE][ID: ${tareaId}] Iniciando proceso para número: ${numero}`);
 
     try {
-        // 1. Navegar a la página
-        console.log(`🌐 [FORCE][ID: ${tareaId}] Navegando a force.mmoviles.com...`);
-        await page.goto('https://force.mmoviles.com/login', { waitUntil: 'networkidle2', timeout: 30000 });
-        console.log(`✅ [FORCE][ID: ${tareaId}] Página cargada.`);
+        // 1. Opcional: Validar si ya estamos en la URL correcta o solo dar un respiro
+        // Si 'obtenerSesionCompleta' ya cargó la página, solo aseguramos que el DOM esté listo
+        const urlActual = page.url();
+        if (!urlActual.includes('force.mmoviles.com')) {
+            console.log(`🌐 [FORCE][ID: ${tareaId}] Navegando a force.mmoviles.com...`);
+            await page.goto('https://force.mmoviles.com/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
+        } else {
+            console.log(`✅ [FORCE][ID: ${tareaId}] Ya nos encontramos en el portal, continuando...`);
+        }
 
-        // 2. Escribir número
+        // 2. Escribir número (Asegurando un tipeo limpio)
         console.log(`⌨️ [FORCE][ID: ${tareaId}] Esperando selector #iccid_info...`);
-        await page.waitForSelector('#iccid_info', { visible: true, timeout: 10000 });
+        await page.waitForSelector('#iccid_info', { visible: true, timeout: 15000 });
         
         await page.evaluate(() => document.querySelector('#iccid_info').value = '');
-        await page.type('#iccid_info', String(numero));
+        await page.type('#iccid_info', String(numero), { delay: 50 }); // Pequeño delay para simular escritura humana
         console.log(`✅ [FORCE][ID: ${tareaId}] Número ${numero} escrito correctamente.`);
 
         // 3. Clic al botón Buscar
@@ -274,7 +281,6 @@ async function validarForce(page, numero, userId, tareaId) {
         throw error;
     }
 }
-
 
 // 1. HERRAMIENTA TELCEL (Requiere Login)
 //-------------------------------------------------------------->> REVISADO PostgreSQL
