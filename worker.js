@@ -13,7 +13,6 @@ const pool = new Pool({
     family: 4
 });
 
-
 const logica = require('./logicaCMU');
 
 const { 
