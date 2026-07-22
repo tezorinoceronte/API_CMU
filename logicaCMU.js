@@ -58,11 +58,18 @@ async function obtenerSesionCompleta(userId, url) {
     // Definición unificada de la ruta
     const userDataDir = path.join(__dirname, 'tmp', 'sessions', String(userId));
     
-    // 1. LIMPIEZA DE SEGURIDAD (Eliminación robusta para evitar bloqueos por SingletonLock)
+    // 1. LIMPIEZA DE SEGURIDAD (Sincronizada con disco y memoria RAM)
     if (fs.existsSync(userDataDir)) {
         try {
+            // Si el directorio físico existe, limpiamos primero cualquier sesión previa en memoria
+            if (sesiones.has(userId)) {
+                const sesionVieja = sesiones.get(userId);
+                if (sesionVieja.browser) await sesionVieja.browser.close().catch(() => {});
+                sesiones.delete(userId);
+            }
+            
             fs.rmSync(userDataDir, { recursive: true, force: true });
-            console.log(`🧹 Directorio de sesión limpiado para evitar bloqueos: ${userDataDir}`);
+            console.log(`🧹 Directorio de sesión y caché en memoria limpiados para: ${userDataDir}`);
         } catch (e) {
             console.log("⚠️ No se pudo limpiar el directorio completo, intentando solo el lock...");
             const lockFile = path.join(userDataDir, 'SingletonLock');
@@ -136,7 +143,10 @@ async function obtenerSesionCompleta(userId, url) {
 
     sesiones.set(userId, { browser, pageForce, lastUsed: ahora });
     return pageForce;
-}async function manejarRecargas(tarea, connection) {
+}
+
+
+async function manejarRecargas(tarea, connection) {
     console.log(`🔄 [Recarga][ID: ${tarea.id}] Iniciando proceso de recarga para número: ${tarea.numero} | Portal: ${tarea.portal}`);
     
     try {
