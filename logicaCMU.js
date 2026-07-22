@@ -29,10 +29,13 @@ const sesiones = new Map();
 const configData = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const TIEMPO_EXPIRACION = 4 * 60 * 1000; // 10 minutos en milisegundos
 const config = {
-    host: process.env.PROXY_HOST,
-    port: process.env.PROXY_PORT,
-    user: process.env.PROXY_USER, // Asegúrate de usar los nombres que configuraste
-    pass: process.env.PROXY_PASS
+    useProxy: true, // Ponlo en true si vas a usar el proxy
+    proxyConfig: {
+        host: process.env.PROXY_HOST,
+        port: process.env.PROXY_PORT,
+        user: process.env.PROXY_USER,
+        pass: process.env.PROXY_PASS
+    }
 };
 
 async function obtenerSesionCompleta(userId, url) {
