@@ -30,7 +30,7 @@ const configData = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const TIEMPO_EXPIRACION = 4 * 60 * 1000; // 10 minutos en milisegundos
 
 const config = {
-    useProxy: false, // Ponlo en true si vas a usar el proxy
+    useProxy: true, // Ponlo en true si vas a usar el proxy
     proxyConfig: {
         host: process.env.PROXY_HOST,
         port: process.env.PROXY_PORT,
