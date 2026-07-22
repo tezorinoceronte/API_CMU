@@ -98,7 +98,8 @@ async function obtenerSesionCompleta(userId, url) {
 
 const browser = await puppeteer.launch({
     headless: "new",
-    executablePath: chromiumPath, // Usará la primera ruta real que encuentre
+    executablePath: chromiumPath,
+    ignoreHTTPSErrors: true,
     args: launchArgs,
     userDataDir: userDataDir
 });
