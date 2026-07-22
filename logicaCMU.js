@@ -48,7 +48,6 @@ const possiblePaths = [
 
 let chromiumPath = possiblePaths.find(p => p && fs.existsSync(p));
 console.log(`--------------------------------------🧭 Chromium ejecutable detectado en: ${chromiumPath || "NO ENCONTRADO --🧭--🧭"}`);
-
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
     const path = require('path');
@@ -57,14 +56,20 @@ async function obtenerSesionCompleta(userId, url) {
     // Definición unificada de la ruta
     const userDataDir = path.join(__dirname, 'tmp', 'sessions', String(userId));
     
-    // 1. LIMPIEZA DE SEGURIDAD (SingletonLock)
-    const lockFile = path.join(userDataDir, 'SingletonLock');
-    if (fs.existsSync(lockFile)) {
+    // 1. LIMPIEZA DE SEGURIDAD (Eliminación robusta para evitar bloqueos por SingletonLock)
+    if (fs.existsSync(userDataDir)) {
         try {
-            fs.unlinkSync(lockFile);
-            console.log("🔓 Bloqueo 'SingletonLock' eliminado.");
+            fs.rmSync(userDataDir, { recursive: true, force: true });
+            console.log(`🧹 Directorio de sesión limpiado para evitar bloqueos: ${userDataDir}`);
         } catch (e) {
-            console.log("⚠️ No se pudo borrar el bloqueo, pero intentaremos continuar.");
+            console.log("⚠️ No se pudo limpiar el directorio completo, intentando solo el lock...");
+            const lockFile = path.join(userDataDir, 'SingletonLock');
+            if (fs.existsSync(lockFile)) {
+                try {
+                    fs.unlinkSync(lockFile);
+                    console.log("🔓 Bloqueo 'SingletonLock' eliminado.");
+                } catch (err) {}
+            }
         }
     }
 
@@ -87,9 +92,10 @@ async function obtenerSesionCompleta(userId, url) {
         }
     }
 
-    // 3. LANZAMIENTO DEL NAVEGADOR (Adaptado para Render/Docker con ruta de respaldo obligatoria)
+    // 3. LANZAMIENTO DEL NAVEGADOR (Adaptado para Render/Docker)
     console.log(`🚀 Lanzando nuevo navegador para: ${userId}`);
- const launchArgs = ['--no-sandbox', '--start-maximized', '--disable-dev-shm-usage', '--disable-gpu'];
+    const launchArgs = ['--no-sandbox', '--start-maximized', '--disable-dev-shm-usage', '--disable-gpu'];
+    
     if (config.useProxy) {
         launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
     }
@@ -128,8 +134,7 @@ async function obtenerSesionCompleta(userId, url) {
 
     sesiones.set(userId, { browser, pageForce, lastUsed: ahora });
     return pageForce;
-}
-async function manejarRecargas(tarea, connection) {
+}async function manejarRecargas(tarea, connection) {
     console.log(`🔄 [Recarga][ID: ${tarea.id}] Iniciando proceso de recarga para número: ${tarea.numero} | Portal: ${tarea.portal}`);
     
     try {
