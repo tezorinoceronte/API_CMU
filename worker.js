@@ -6,9 +6,9 @@ const jwt = require('jsonwebtoken');
 const pool = new Pool({
     host: 'aws-0-us-east-1.pooler.supabase.com',
     user: 'postgres.srfsdnphgdwrqjggcwfc',
-    password: 'TyZzGz0RsYJcMcqM', // Aquí pones tu contraseña tal cual
+    password: 'x4sARqQEyGO38oX2', // Aquí pones tu contraseña tal cual
     database: 'postgres',
-    port: 5432,
+    port: 6543,
     ssl: { rejectUnauthorized: false },
     family: 4
 });
@@ -23,10 +23,10 @@ const {
     limpiarSesionesInactivas, manejarQR_SMS
 } = logica;
 
-console.log(`🔍 [DB] Intentando conectar a: ${process.env.SUPABASE_URL? "URL CONFIGURADA" : "¡ERROR! URL NO ENCONTRADA"}`);
+console.log(`🔍 [DB] Intentando conectar a: ${process.env.DATABASE_URL? "URL CONFIGURADA" : "¡ERROR! URL NO ENCONTRADA"}`);
 const WORKER_ID = process.env.WORKER_ID || 'WORKER_01';
 
-console.log(`🔍 [DB] Intentando conectar a: ${process.env.SUPABASE_URL ? "URL CONFIGURADA" : "¡ERROR! URL NO ENCONTRADA"}`);
+console.log(`🔍 [DB] Intentando conectar a: ${process.env.DATABASE_URL ? "URL CONFIGURADA" : "¡ERROR! URL NO ENCONTRADA"}`);
 
 
 async function cicloWorker() {
