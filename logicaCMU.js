@@ -94,12 +94,18 @@ async function obtenerSesionCompleta(userId, url) {
 
     const browser = await puppeteer.launch({ 
         headless: "new",
-             args: [
-            ...launchArgs,
-            '--disable-dev-shm-usage',
-            '--no-sandbox',
-            '--disable-setuid-sandbox'
-        ],
+    const launchArgs = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
+        '--no-zygote',
+        '--single-process', // Vital en algunos entornos Docker slim para evitar fallos de IPC
+        '--window-size=1920,1080',
+        '--ignore-certificate-errors',
+        '--headless=new'
+    ];
         userDataDir: userDataDir
     });
 
