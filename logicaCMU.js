@@ -52,10 +52,6 @@ console.log(`--------------------------------------🧭 Chromium ejecutable dete
 
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
-    const path = require('path');
-    const fs = require('fs');
-
-    // Definición unificada de la ruta
     const userDataDir = path.join(__dirname, 'tmp', 'sessions', String(userId));
     
     // 1. LIMPIEZA DE SEGURIDAD (SingletonLock)
@@ -98,7 +94,7 @@ async function obtenerSesionCompleta(userId, url) {
 
     const browser = await puppeteer.launch({ 
         headless: "new",
-        executablePath: '/usr/bin/chromium', // Ruta fija blindada para el entorno de Render/Docker
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium', // Ruta fija blindada para Render
         args: [
             ...launchArgs,
             '--disable-dev-shm-usage',
@@ -119,7 +115,6 @@ async function obtenerSesionCompleta(userId, url) {
 
     await pageForce.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
     
-    // Navegación tolerante con timeout ampliado para evitar cortes prematuros (ERR_TIMED_OUT)
     try {
         console.log(`🌐 Intentando conectar a: ${url}`);
         await pageForce.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
@@ -129,7 +124,7 @@ async function obtenerSesionCompleta(userId, url) {
         await pageForce.reload({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
     }
 
-    // Verificación de IP a través del proxy o red actual
+    // Verificación de IP
     try {
         const ip = await pageForce.evaluate(async () => {
             const response = await fetch('https://api.ipify.org?format=json');
@@ -210,33 +205,28 @@ async function manejarRecargas(tarea, connection) {
 //-- VALIDA FORCE ----------------> LA PRIMER CONSULTA 
 
 async function validarForce(page, numero, userId, tareaId) {
-    console.log(`🚀 [FORCE][ID: ${tareaId}] Iniciando proceso para número: ${numero}`);
+    console.log(`🚀 Iniciando proceso para número: ${numero} (Tarea: ${tareaId})`);
 
     try {
-        // 1. Opcional: Validar si ya estamos en la URL correcta o solo dar un respiro
-        // Si 'obtenerSesionCompleta' ya cargó la página, solo aseguramos que el DOM esté listo
+        // Evitamos recargas innecesarias si ya estamos posicionados en el portal
         const urlActual = page.url();
         if (!urlActual.includes('force.mmoviles.com')) {
-            console.log(`🌐 [FORCE][ID: ${tareaId}] Navegando a force.mmoviles.com...`);
             await page.goto('https://force.mmoviles.com/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
         } else {
-            console.log(`✅ [FORCE][ID: ${tareaId}] Ya nos encontramos en el portal, continuando...`);
+            console.log("✅ Ya nos encontramos en el portal Force, continuando...");
         }
 
-        // 2. Escribir número (Asegurando un tipeo limpio)
-        console.log(`⌨️ [FORCE][ID: ${tareaId}] Esperando selector #iccid_info...`);
+        // Escribir número
         await page.waitForSelector('#iccid_info', { visible: true, timeout: 15000 });
-        
         await page.evaluate(() => document.querySelector('#iccid_info').value = '');
-        await page.type('#iccid_info', String(numero), { delay: 50 }); // Pequeño delay para simular escritura humana
-        console.log(`✅ [FORCE][ID: ${tareaId}] Número ${numero} escrito correctamente.`);
+        await page.type('#iccid_info', String(numero), { delay: 50 });
+        console.log("✅ Número escrito.");
 
-        // 3. Clic al botón Buscar
-        console.log(`🖱️ [FORCE][ID: ${tareaId}] Haciendo clic en #button_info...`);
+        // Clic al botón Buscar
         await page.click('#button_info');
+        console.log("🔍 Clic en Buscar, esperando resultados...");
 
-        // 4. Esperar resultados
-        console.log(`⏳ [FORCE][ID: ${tareaId}] Esperando respuesta del servidor...`);
+        // Esperar resultados dinámicos
         await page.waitForFunction(
             () => {
                 const el = document.querySelector('#iccid_response');
@@ -244,9 +234,8 @@ async function validarForce(page, numero, userId, tareaId) {
             },
             { timeout: 20000 }
         );
-        console.log(`✅ [FORCE][ID: ${tareaId}] Resultados recibidos.`);
 
-        // 5. Extraer valores
+        // Extraer valores
         const resultados = await page.evaluate(() => {
             return {
                 iccid: document.querySelector('#iccid_response')?.value || 'N/A',
@@ -255,33 +244,28 @@ async function validarForce(page, numero, userId, tareaId) {
             };
         });
 
-        console.log(`✨ [FORCE][ID: ${tareaId}] Extracción exitosa:`, JSON.stringify(resultados));
+        console.log("✨ Resultados obtenidos:", resultados);
 
-        // 6. Actualizar Base de Datos
-        console.log(`💾 [FORCE][ID: ${tareaId}] Guardando resultado en BD...`);
+        // Actualizar Base de Datos (Corregido a pool.query y parámetros $1, $2 para Postgres)
         await pool.query(
-            "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
-            ['COMPLETADO', JSON.stringify(resultados), tareaId]
+            "UPDATE public.cola_tareas SET estado = 'COMPLETADO', resultado = $1 WHERE id = $2", 
+            [JSON.stringify(resultados), tareaId]
         );
-        
-        console.log(`🏁 [FORCE][ID: ${tareaId}] Proceso finalizado con éxito.`);
+
         return resultados;
 
     } catch (error) {
-        console.error(`❌ [FORCE][ID: ${tareaId}] Error en la ejecución:`, error.message);
+        console.error("❌ Error en validarForce:", error.message);
         
-        // 7. Registrar error en BD
         if (tareaId) {
-            console.log(`💾 [FORCE][ID: ${tareaId}] Reportando error a la base de datos.`);
             await pool.query(
-                "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
-                ['ERROR', error.message.substring(0, 255), tareaId]
-            ).catch(err => console.error(`🚨 [FORCE][ID: ${tareaId}] Fallo crítico al actualizar error en BD:`, err.message));
+                "UPDATE public.cola_tareas SET estado = 'ERROR', resultado = $1 WHERE id = $2", 
+                [error.message.substring(0, 255), tareaId]
+            );
         }
         throw error;
     }
 }
-
 // 1. HERRAMIENTA TELCEL (Requiere Login)
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 async function ejecutarLoginTelcel(page, userId, tarea, connection) {
