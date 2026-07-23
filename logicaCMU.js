@@ -31,7 +31,7 @@ const configData = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const TIEMPO_EXPIRACION = 4 * 60 * 1000; // 10 minutos en milisegundos
 
 const config = {
-    useProxy: false, // Ponlo en true si vas a usar el proxy
+    useProxy: true, // Ponlo en true si vas a usar el proxy
     proxyConfig: {
         host: process.env.PROXY_HOST,
         port: process.env.PROXY_PORT,
@@ -1034,7 +1034,6 @@ async function inyectarTokenYValidar(page, tareaId, numero) {
 
 async function manejarQR_SMS(page, tarea, connection) {
     console.log(`📸 [INICIO] Extracción QR para Tarea ID: ${tarea.id} | User: ${tarea.user_id}`);
-
     try {
         // 1. ESPERAR EL MODAL POR SU ID REAL: #modalABE
         console.log("🔍 [BOT] Esperando #modalABE...");
@@ -1043,7 +1042,6 @@ async function manejarQR_SMS(page, tarea, connection) {
         // 2. ACCEDER AL IFRAME DENTRO DEL MODAL
         const iframeElement = await page.waitForSelector('#modalABE iframe', { timeout: 15000 });
         const frame = await iframeElement.contentFrame();
-
         if (!frame) throw new Error("No se pudo acceder al contenido del iframe dentro de #modalABE");
 
         // 3. EXTRAER LA IMAGEN DIRECTAMENTE
@@ -1051,17 +1049,13 @@ async function manejarQR_SMS(page, tarea, connection) {
             const img = document.querySelector('img.img-fluid.qr');
             return img ? img.getAttribute('src') : null;
         });
-
         if (!qrData) throw new Error("No se encontró la imagen img.img-fluid.qr dentro del iframe");
 
         // 4. PROCESAR EL BASE64
         const linkFinal = await obtenerUrlDeBase64(qrData);
-
         if (linkFinal) {
             console.log("🔗 [ÉXITO] Link decodificado:", linkFinal);
-            
-            // CORRECCIÓN PG: Uso de $1, $2, $3 y .query()
-            // Nota: fecha_actualizacion = NOW() es correcto en Postgres
+
             await connection.query(
                 "UPDATE public.cola_tareas SET estado = $1, resultado = $2, link_final = $3, fecha_actualizacion = NOW() WHERE id = $4 AND user_id = $5",
                 ['ENVIANDO_QR', 'PROCESADO', linkFinal, tarea.id, tarea.user_id]
@@ -1069,17 +1063,20 @@ async function manejarQR_SMS(page, tarea, connection) {
         } else {
             throw new Error("Fallo en la decodificación del QR");
         }
-
     } catch (e) {
         console.error(`❌ [ERROR] Tarea ${tarea.id}: ${e.message}`);
-        
-        // CORRECCIÓN PG: Uso de $1, $2, $3 y .query()
+
+        // CORRECCIÓN: estado = 'FALLO_EXTRACCION' (no 'REINTENTAR_QR') para que
+        // el frontend muestre el botón de reintento al usuario, en vez de que
+        // el worker reintente solo en bucle. Se agregó también el 4to parámetro
+        // que faltaba en la consulta.
         await connection.query(
             "UPDATE public.cola_tareas SET estado = $1, resultado = $2, fecha_actualizacion = NOW() WHERE id = $3 AND user_id = $4",
-            [e.message.substring(0, 255), tarea.id, tarea.user_id]
+            ['FALLO_EXTRACCION', e.message.substring(0, 255), tarea.id, tarea.user_id]
         );
     }
 }
+
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
 //----------------------------------------------------------------------------------------------------------
