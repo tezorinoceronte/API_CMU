@@ -972,18 +972,7 @@ async function inyectarTokenYValidar(page, tareaId, numero) {
         const selectorToken = 'input[id*="token"]';
         const selectorBoton = '#formRegistro\\:j_id_2y';
 
-        // CORRECCIÓN CLAVE: NO se abre navegador ni página nueva aquí.
-        // Se usa directamente la "page" recibida como parámetro, que ya
-        // trae la sesión existente. Confirmamos que el campo de token
-        // exista en la página ACTUAL antes de tocar nada — si no existe,
-        // fallamos de inmediato con un mensaje claro, en vez de esperar
-        // 15 segundos a ciegas o intentar navegar a otro lado.
-        const inputExiste = await page.$(selectorToken);
-        if (!inputExiste) {
-            throw new Error("El campo de token no está presente en la página actual. La sesión pudo haberse perdido.");
-        }
-
-        // 2. Limpiar input e inyectar valor (en la MISMA página, sin goto ni reload)
+        // 2. Limpiar input e inyectar valor
         console.log(`⌨️ [TOKEN][ID: ${tareaId}] Inyectando token en el formulario...`);
         await page.evaluate((sel, val) => {
             const input = document.querySelector(sel);
@@ -996,10 +985,7 @@ async function inyectarTokenYValidar(page, tareaId, numero) {
             }
         }, selectorToken, token);
 
-        // NUEVO: Screenshot justo después de ingresar el token, antes de dar clic
-        await tomarCaptura(page, `token_ingresado_${tareaId}.png`);
-
-        // 3. Esperar a que el botón esté disponible antes de hacer clic
+        // 3. NUEVO: esperar a que el botón esté disponible antes de hacer clic
         console.log(`⏳ [TOKEN][ID: ${tareaId}] Esperando a que el botón de validar esté disponible...`);
         await page.waitForSelector(selectorBoton, { visible: true, timeout: 15000 });
 
@@ -1009,9 +995,6 @@ async function inyectarTokenYValidar(page, tareaId, numero) {
 
         console.log(`⏳ [TOKEN][ID: ${tareaId}] Esperando respuesta de validación...`);
         await new Promise(r => setTimeout(r, 5000));
-
-        // NUEVO: Screenshot después de presionar el botón
-        await tomarCaptura(page, `token_validado_${tareaId}.png`);
 
         // 5. Verificar error en pantalla
         const mensajeError = await page.evaluate(() => {
@@ -1077,17 +1060,15 @@ async function manejarQR_SMS(page, tarea, connection) {
     } catch (e) {
         console.error(`❌ [ERROR] Tarea ${tarea.id}: ${e.message}`);
 
-        // CORRECCIÓN: estado = 'FALLO_EXTRACCION' (no 'REINTENTAR_QR') para que
-        // el frontend muestre el botón de reintento al usuario, en vez de que
-        // el worker reintente solo en bucle. Se agregó también el 4to parámetro
-        // que faltaba en la consulta.
+        // CORRECCIÓN: se agregó el 4to parámetro faltante ($3) y se separó
+        // el mensaje de error (va en "resultado") del estado (que ahora
+        // vuelve a 'REINTENTAR_QR' para que el usuario pueda reintentar).
         await connection.query(
             "UPDATE public.cola_tareas SET estado = $1, resultado = $2, fecha_actualizacion = NOW() WHERE id = $3 AND user_id = $4",
-            ['FALLO_EXTRACCION', e.message.substring(0, 255), tarea.id, tarea.user_id]
+            ['REINTENTAR_QR', e.message.substring(0, 255), tarea.id, tarea.user_id]
         );
     }
 }
-
 //-------------------------------------------------------------->> REVISADO PostgreSQL
 
 //----------------------------------------------------------------------------------------------------------
