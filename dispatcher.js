@@ -2,15 +2,20 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs'); 
 const jwt = require('jsonwebtoken');
 
-// Datos de conexión directos
+
+// Configuración robusta para evitar el error de red1.
 const pool = new Pool({
-    host: 'aws-0-us-east-1.pooler.supabase.com',
-    user: 'postgres.srfsdnphgdwrqjggcwfc',
-    password: 'x4sARqQEyGO38oX2', // Aquí pones tu contraseña tal cual
-    database: 'postgres',
-    port: 6543,
-    ssl: { rejectUnauthorized: false },
-    family: 4
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    
+    rejectUnauthorized: false
+  },
+  // Forzar IPv4 para evitar el error ENETUNREACH
+  family: 4, 
+  // Aumentar tiempos de espera para entornos en la nube
+  connectionTimeoutMillis: 15000,
+  idleTimeoutMillis: 30000,
+  max: 5 // Reducir conexiones simultáneas para evitar saturación
 });
 
 async function ejecutarQuery(sql, params = []) {
