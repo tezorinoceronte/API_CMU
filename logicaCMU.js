@@ -342,7 +342,7 @@ async function manejarBiometricos(tarea, connection) {
     console.log(`🚨 [Manejador] REGISTRANDO BIOMETRICOS: ${tarea.id} | Número: ${tarea.numero}`);
     
     try {
-        const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribidores/app/login';
+        const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
         const page = await obtenerSesionCompleta(tarea.user_id, url);
         
         await ejecutarLoginTelcel(page, tarea.user_id, tarea, connection);
