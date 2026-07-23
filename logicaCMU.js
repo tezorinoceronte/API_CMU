@@ -31,7 +31,7 @@ const configData = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const TIEMPO_EXPIRACION = 4 * 60 * 1000; // 10 minutos en milisegundos
 
 const config = {
-    useProxy: false, // Ponlo en true si vas a usar el proxy
+    useProxy: true, // Ponlo en true si vas a usar el proxy
     proxyConfig: {
         host: process.env.PROXY_HOST,
         port: process.env.PROXY_PORT,
@@ -54,7 +54,7 @@ console.log(`--------------------------------------🧭 Chromium ejecutable dete
 async function obtenerSesionCompleta(userId, url) {
     const ahora = Date.now();
     const userDataDir = path.join(__dirname, 'tmp', 'sessions', String(userId));
-    
+
     // 1. LIMPIEZA DE SEGURIDAD (SingletonLock)
     const lockFile = path.join(userDataDir, 'SingletonLock');
     if (fs.existsSync(lockFile)) {
@@ -70,7 +70,7 @@ async function obtenerSesionCompleta(userId, url) {
     if (sesiones.has(userId)) {
         const sesion = sesiones.get(userId);
         const inactivo = (ahora - sesion.lastUsed) > TIEMPO_EXPIRACION;
-        const estaVivo = sesion.browser?.process() !== null && 
+        const estaVivo = sesion.browser?.process() !== null &&
                          sesion.pageForce && !sesion.pageForce.isClosed();
 
         if (estaVivo && !inactivo) {
@@ -79,38 +79,31 @@ async function obtenerSesionCompleta(userId, url) {
             await sesion.pageForce.bringToFront();
             return sesion.pageForce;
         } else {
-            console.log(`🧹 Cerrando sesión obsoleta de: ${userId}`);
+            console.log(`🧹 Cerrando sesión obsoleta de: ${userId} | browser.process()=${sesion.browser?.process() !== null} | pageForce cerrada=${sesion.pageForce?.isClosed()} | inactivo=${inactivo}`);
             if (sesion.browser) await sesion.browser.close().catch(() => {});
             sesiones.delete(userId);
         }
     }
 
+    // 3. LANZAMIENTO DEL NAVEGADOR
     console.log(`🚀 Lanzando nuevo navegador para: ${userId}`);
+    const launchArgs = [
+        '--no-sandbox',
+        '--start-maximized',
+        '--disable-dev-shm-usage' // clave en Render: evita errores de memoria compartida
+    ];
 
-const launchArgs = [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-accelerated-2d-canvas',
-    '--disable-gpu',
-    '--no-zygote',
-    '--single-process',
-    '--start-maximized',
-    '--window-size=1920,1080',
-    '--ignore-certificate-errors'
-];
+    if (config.useProxy) {
+        launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
+    }
 
-if (config.useProxy) {
-    launchArgs.push(`--proxy-server=http://${config.proxyConfig.host}:${config.proxyConfig.port}`);
-}
+    const browser = await puppeteer.launch({
+        headless: "new",
+        executablePath: chromiumPath, // necesario en Render: usa el Chromium instalado en el Docker
+        args: launchArgs,
+        userDataDir: userDataDir
+    });
 
-const browser = await puppeteer.launch({
-    headless: "new",
-    executablePath: chromiumPath,
-    args: launchArgs,
-    userDataDir: userDataDir
-});
-  
     const pageForce = await browser.newPage();
 
     if (config.useProxy && config.proxyConfig.user) {
@@ -121,14 +114,13 @@ const browser = await puppeteer.launch({
     }
 
     await pageForce.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36');
-    
+
     try {
         console.log(`🌐 Intentando conectar a: ${url}`);
-        await pageForce.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await pageForce.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
     } catch (error) {
         console.log(`⚠️ Timeout o corte de red detectado: ${error.message}`);
-        await pageForce.reload({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+        await pageForce.reload({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {});
     }
 
     // Verificación de IP
@@ -146,6 +138,9 @@ const browser = await puppeteer.launch({
     sesiones.set(userId, { browser, pageForce, lastUsed: ahora });
     return pageForce;
 }
+
+
+
 
 async function manejarRecargas(tarea, connection) {
     console.log(`🔄 [Recarga][ID: ${tarea.id}] Iniciando proceso de recarga para número: ${tarea.numero} | Portal: ${tarea.portal}`);
