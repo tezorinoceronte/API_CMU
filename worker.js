@@ -1,5 +1,5 @@
 const { Pool } = require('pg');
-const bcrypt = require('bcryptjs'); 
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 // Datos de conexión directos
@@ -14,11 +14,10 @@ const pool = new Pool({
 });
 
 const logica = require('./logicaCMU');
-
-const { 
-    manejarRecargas, manejarBiometricos, manejarACT_FISICO, manejarACT_ESIM, 
+const {
+    manejarRecargas, manejarBiometricos, manejarACT_FISICO, manejarACT_ESIM,
     manejarACT_ESIM_REINTENTO, ejecutar_ACT_ESIM_EXITOSA_QR, manejarACT_FISICA_REINTENTO,
-    manejarQR, manejarQR_ACT, manejarToken, obtenerSesionCompleta, 
+    manejarQR, manejarQR_ACT, manejarToken, obtenerSesionCompleta,
     limpiarSesionesInactivas, manejarQR_SMS
 } = logica;
 
@@ -31,26 +30,26 @@ async function cicloWorker() {
     let tarea;
     try {
         client = await pool.connect();
-        
+
         // --- CONSULTA ATÓMICA BLINDADA CONTRA CONCURRENCIA ---
-        // Selecciona y marca como 'PROCESANDO' en una sola instrucción atómica.
-        // Esto evita que dos hilos agarren la misma tarea al mismo tiempo.
+        // CORRECCIÓN: capturamos el estado ORIGINAL en "estado_original"
+        // antes de que el UPDATE lo sobreescriba a 'PROCESANDO'.
         const queryAtomica = `
             WITH tarea_a_procesar AS (
-                SELECT id FROM public.cola_tareas 
-                WHERE worker_id = $1 
-                AND estado IN ('ASIGNADO', 'FALLO_TOKEN_ERROR2', 'PROCESANDO_ESIM', 'REINTENTAR_QR', 
-                              'ACT_ESIM_REINTENTAR', 'ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO', 'ACT_ESIM', 
-                              'ACT_FISICA', 'ACT_ESIM_EXITOSA_QR_1', 'VALIDANDO_TOKEN')
+                SELECT id, estado AS estado_original FROM public.cola_tareas
+                WHERE worker_id = $1
+                AND estado IN ('ASIGNADO', 'FALLO_TOKEN_ERROR2', 'PROCESANDO_ESIM', 'REINTENTAR_QR',
+                                'ACT_ESIM_REINTENTAR', 'ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO', 'ACT_ESIM',
+                                'ACT_FISICA', 'ACT_ESIM_EXITOSA_QR_1', 'VALIDANDO_TOKEN')
                 ORDER BY id ASC
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
             )
-            UPDATE public.cola_tareas 
+            UPDATE public.cola_tareas
             SET estado = 'PROCESANDO'
             FROM tarea_a_procesar
             WHERE public.cola_tareas.id = tarea_a_procesar.id
-            RETURNING public.cola_tareas.*;
+            RETURNING public.cola_tareas.*, tarea_a_procesar.estado_original;
         `;
 
         const res = await client.query(queryAtomica, [WORKER_ID]);
@@ -60,43 +59,46 @@ async function cicloWorker() {
         }
 
         tarea = res.rows[0];
-        console.log(`🚀 [Worker: ${WORKER_ID}] Tarea encontrada y bloqueada: ${tarea.id} | Estado anterior procesándose...`);
+        console.log(`🚀 [Worker: ${WORKER_ID}] Tarea encontrada y bloqueada: ${tarea.id} | Estado real: ${tarea.estado_original}`);
 
-        // --- LÓGICA DE DELEGACIÓN ---
+        // --- LÓGICA DE DELEGACIÓN (usando estado_original, no estado) ---
         if (tarea.tipo_tarea === 'RECARGA') {
             await manejarRecargas(tarea, client);
+
         } else if (tarea.tipo_tarea === 'BIOMETRICOS') {
-            if (['VALIDANDO_TOKEN', 'FALLO_TOKEN'].includes(tarea.estado)) {
+            if (['VALIDANDO_TOKEN', 'FALLO_TOKEN'].includes(tarea.estado_original)) {
                 const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
                 const page = await obtenerSesionCompleta(tarea.user_id, url);
                 await manejarToken(page, tarea, client);
-            } else if (tarea.estado === 'REINTENTAR_QR') {
+            } else if (tarea.estado_original === 'REINTENTAR_QR') {
                 const url = 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login';
                 const page = await obtenerSesionCompleta(tarea.user_id, url);
                 await manejarQR_SMS(page, tarea, client);
             } else {
                 await manejarBiometricos(tarea, client);
             }
+
         } else if (tarea.tipo_tarea === 'ACT_FISICA') {
-            if (['ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO'].includes(tarea.estado)) {
+            if (['ACT_FISICA_RECARGA', 'ACT_FISICA_FALLO'].includes(tarea.estado_original)) {
                 await manejarACT_FISICA_REINTENTO(tarea, client);
-            } else if (tarea.estado === 'ACT_ESIM_EXITOSA_QR_1') {
+            } else if (tarea.estado_original === 'ACT_ESIM_EXITOSA_QR_1') {
                 const page = await obtenerSesionCompleta(tarea.user_id, 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login');
                 await manejarQR_ACT(page, tarea, client);
             } else {
                 await manejarACT_FISICO(tarea, client);
             }
+
         } else if (tarea.tipo_tarea === 'ACT_ESIM') {
-            if (tarea.estado === 'ACT_ESIM_EXITOSA_QR_1') {
+            if (tarea.estado_original === 'ACT_ESIM_EXITOSA_QR_1') {
                 const page = await obtenerSesionCompleta(tarea.user_id, 'https://www.distribuidor.telcel.com:4475/Portal-Distribuidores/app/login');
                 await manejarQR_ACT(page, tarea, client);
-            } else if (tarea.estado === 'ASIGNADO' || tarea.estado === 'ACT_ESIM') {
+            } else if (tarea.estado_original === 'ASIGNADO' || tarea.estado_original === 'ACT_ESIM') {
                 await manejarACT_ESIM(tarea, client);
-            } else if (['ACT_ESIM_REINTENTAR', 'ACT_ESIM_FALLO'].includes(tarea.estado)) {
+            } else if (['ACT_ESIM_REINTENTAR', 'ACT_ESIM_FALLO'].includes(tarea.estado_original)) {
                 await manejarACT_ESIM_REINTENTO(tarea, client);
-            } else if (tarea.estado === 'ACT_ESIM_EXITOSA_QR') {
+            } else if (tarea.estado_original === 'ACT_ESIM_EXITOSA_QR') {
                 await ejecutar_ACT_ESIM_EXITOSA_QR(null, tarea);
-            } else if (tarea.estado === 'ACT_ESIM_VINCULAR') {
+            } else if (tarea.estado_original === 'ACT_ESIM_VINCULAR') {
                 await manejarQR(null, tarea, client);
             }
         }
@@ -105,11 +107,10 @@ async function cicloWorker() {
         console.error(`🚨 [Worker: ${WORKER_ID}] ERROR DETALLADO:`);
         console.error(`   Mensaje: ${err.message}`);
         console.error(`   Stack: ${err.stack}`);
-        
         if (client && tarea && tarea.id) {
             try {
                 await client.query(
-                    "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3", 
+                    "UPDATE public.cola_tareas SET estado = $1, resultado = $2 WHERE id = $3",
                     ['ERROR', err.message.substring(0, 255), tarea.id]
                 );
             } catch (e) {
@@ -132,7 +133,6 @@ async function iniciarWorker() {
 }
 
 console.log(`📡 [WOKER] ON`);
-iniciarWorker();
 console.log(`..📡..................................📡............... [WOKER] ON✅`);
-console.log(`..📡.....📡............................................ [WOKER] ON✅`);
+
 module.exports = { iniciarWorker };
